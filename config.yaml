@@ -1,0 +1,9 @@
+symbols:
+  XAUUSD:
+    point_value: 0.01
+  EURUSD:
+    point_value: 0.0001
+  GBPUSD:
+    point_value: 0.0001
+  USDJPY:
+    point_value: 0.01
