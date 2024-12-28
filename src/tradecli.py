@@ -4,6 +4,9 @@ import pandas as pd
 from datetime import datetime
 import os
 import copy
+from sklearn.cluster import KMeans
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 @dataclass
 class Tag:
@@ -16,11 +19,15 @@ class Trade:
     uid: str
     tags: List[Tag] = field(default_factory=list)
 
+    def get_tags_dict(self) -> Dict[str, any]:
+        return {tag.key: tag.value for tag in self.tags}
+    
     def add_tag(self, key: str, value: Union[bool, float]):
         self.tags.append(Tag(key=key, value=value, timestamp=None))
 
     def copy(self):
         return copy.deepcopy(self)
+
 
 @dataclass
 class TradeJournal:
