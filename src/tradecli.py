@@ -24,7 +24,7 @@ class Trade:
 
 @dataclass
 class TradeJournal:
-    trades: List<Trade> = field(default_factory=list)
+    trades: List[Trade] = field(default_factory=list)
 
     def add_trade(self, trade: Trade):
         self.trades.append(trade)
