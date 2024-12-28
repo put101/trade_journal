@@ -73,4 +73,3 @@ position = TradePosition(trade_uid="4", entry_price=1.3000, sl_price=1.2950, tp_
 position.add_tags_to_trade(t_copy)
 
 print(journal.trades)
-print(journal.positions)
