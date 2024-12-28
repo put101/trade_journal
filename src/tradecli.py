@@ -152,26 +152,18 @@ class TradeJournal:
         for trade in self.trades:
             md_path = os.path.join(output_dir, f"trade_{trade.uid}.md")
             md_content = f"# Trade Summary\n\n"
-            md_content += f"**Trade UID:** {trade.uid}\n"
-            md_content += f"**Tags:** {', '.join([f'{tag.key}:{tag.value}' for tag in trade.tags])}\n"
-            md_content += f"\n\n![Trade Plot](trade_plot_{trade.uid}.png)\n\n"
+            md_content += f"**Trade UID:** {trade.uid} \n\n"
+            md_content += f"**Tags:** {', '.join([f'{tag.key}:{tag.value}' for tag in trade.tags])}\n\n"
+            
+            #md_content += f"\n\n![Trade Plot](trade_plot_{trade.uid}.png)\n\n"
+                        
+            md_content += f"## Trade Plot Explanation\n\n"
+
             md_content += "\n[Back to Index](index.md)\n"
+            
             with open(md_path, 'w') as md_file:
                 md_file.write(md_content)
-            self.plot_trade(trade, output_dir)
+            
         self.write_index_markdown(output_dir)
         self.plot_statistics(output_dir)
 
-    def plot_trade(self, trade: Trade, output_dir: str):
-        df = self.to_dataframe()
-        trade_df = df[df['trade_uid'] == trade.uid]
-        if trade_df.empty:
-            return
-        
-        plt.figure(figsize=(10, 6))
-        sns.lineplot(data=trade_df)
-        plt.title(f'Trade {trade.uid} Plot')
-        plt.xlabel('Timestamp')
-        plt.ylabel('Value')
-        plt.savefig(os.path.join(output_dir, f'trade_plot_{trade.uid}.png'))
-        plt.close()

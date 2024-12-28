@@ -2,6 +2,8 @@ from datetime import datetime
 from tradecli import *
 import markdown
 import os
+import random
+random.seed(43)
 
 class TF:    
     m1="m1"
@@ -268,6 +270,30 @@ journal.add_trade(t)
 PotentialReward.add_tags_to_trade(t, 1.3150)
 Confidence.add_tags_to_trade(t, 4)
 MultiTimeframeAnalysis.add_tags_to_trade(t, True)
+
+# Define distributions for different tags
+confidence_levels = [1, 2, 3, 4, 5]
+management_strategies = [RiskManagement.NO_MANAGEMENT, RiskManagement.BE_AFTER_1R, RiskManagement.BE_AFTER_PUSH, RiskManagement.CLOSE_EARLY]
+timeframes = TF.ALL_TAGS
+
+# Add more entries to the journal using a loop with random choices
+for i in range(5, 15):
+    t = Trade(uid=str(i))
+    t.add_tag(random.choice([PA.type_1_(tf) for tf in timeframes]), True)
+    t.add_tag(random.choice([PA.type_2_(tf) for tf in timeframes]), True)
+    journal.add_trade(t)
+    entry_price = round(1.1000 + random.uniform(0.01, 0.05), 4)
+    sl_price = round(entry_price - random.uniform(0.005, 0.01), 4)
+    tp_price = round(entry_price + random.uniform(0.01, 0.05), 4)
+    close_price = round(entry_price + random.uniform(-0.02, 0.02), 4) if random.random() > 0.5 else None
+    position = TradePosition(trade_uid=str(i), entry_price=entry_price, sl_price=sl_price, tp_price=tp_price, close_price=close_price)
+    position.add_tags_to_trade(t)
+    EntryTime(entry_time=datetime.now()).add_tags_to_trade(t)
+    RR.add_tags_to_trade(t)
+    MultiTimeframeAnalysis.add_tags_to_trade(t, random.choice([True, False]))
+    Confidence.add_tags_to_trade(t, random.choice(confidence_levels))
+    PotentialReward.add_tags_to_trade(t, round(entry_price + random.uniform(0.01, 0.05), 4))
+    RiskManagement.add_tags_to_trade(t, random.choice(management_strategies))
 
 # add defaults to all trades or certain tags that should not be None
 for trade in journal.trades:
