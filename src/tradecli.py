@@ -17,7 +17,7 @@ class Trade:
     tags: List[Tag] = field(default_factory=list)
 
     def add_tag(self, key: str, value: Union[bool, float]):
-        self.tags.append(Tag(timestamp=datetime.now(), key=key, value=value))
+        self.tags.append(Tag(key=key, value=value, timestamp=None))
 
     def copy(self):
         return copy.deepcopy(self)

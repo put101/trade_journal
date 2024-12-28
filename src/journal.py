@@ -44,6 +44,21 @@ class TradePosition:
         if self.close_price is not None:
             trade.add_tag("close_price", self.close_price)
 
+class RR:
+    DEFAULT_RR = 0.0
+    
+    @staticmethod
+    def calculate_risk_reward_ratio(entry_price: float, sl_price: float, tp_price: float) -> float:
+        return (tp_price - entry_price) / (entry_price - sl_price)
+    @staticmethod
+    def add_tags_to_trade(trade: Trade):
+        entry_price = next((t.value for t in trade.tags if t.key == "entry_price"), None)
+        sl_price = next((t.value for t in trade.tags if t.key == "sl_price"), None)
+        tp_price = next((t.value for t in trade.tags if t.key == "tp_price"), None)
+        if entry_price is not None and sl_price is not None and tp_price is not None:
+            rr = RR.calculate_risk_reward_ratio(entry_price, sl_price, tp_price)
+            trade.add_tag("risk_reward_ratio", rr)
+    
 journal = TradeJournal()
 
 t = Trade(uid="1")
@@ -52,18 +67,21 @@ t.add_tag(TYPE_3_M15, True)
 journal.add_trade(t)
 position = TradePosition(trade_uid="1", entry_price=1.1000, sl_price=1.0950, tp_price=1.1100)
 position.add_tags_to_trade(t)
+RR.add_tags_to_trade(t)
 
 t = Trade(uid="2")
 t.add_tag(PA.type_2_(TF.h1), True)
 journal.add_trade(t)
 position = TradePosition(trade_uid="2", entry_price=1.2000, sl_price=1.1950, tp_price=1.2100)
 position.add_tags_to_trade(t)
+RR.add_tags_to_trade(t)
 
 t = Trade(uid="3")
 t.add_tag("SL_distance", 0.5)
 journal.add_trade(t)
 position = TradePosition(trade_uid="3", entry_price=1.3000, sl_price=1.2950, tp_price=1.3100)
 position.add_tags_to_trade(t)
+RR.add_tags_to_trade(t)
 
 t_copy = t.copy()
 t_copy.uid = "4"
@@ -71,5 +89,6 @@ t_copy.add_tag("management_strategy", "strategy_2")
 journal.add_trade(t_copy)
 position = TradePosition(trade_uid="4", entry_price=1.3000, sl_price=1.2950, tp_price=1.3100, close_price=1.3050)
 position.add_tags_to_trade(t_copy)
+RR.add_tags_to_trade(t_copy)
 
 print(journal.trades)
