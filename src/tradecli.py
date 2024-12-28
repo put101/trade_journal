@@ -142,6 +142,9 @@ class TradeJournal:
         if df.empty:
             return
         
+        plt.style.use('dark_background')
+        sns.set_palette("bright")
+        
         total_rows = df.shape[0]
         skipped_rows_outcome = df['outcome'].isnull().sum()
         skipped_rows_return = df['return'].isnull().sum()
