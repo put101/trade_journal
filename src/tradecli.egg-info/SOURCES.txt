@@ -1,8 +1,0 @@
-setup.py
-src/tradecli.py
-src/tradecli.egg-info/PKG-INFO
-src/tradecli.egg-info/SOURCES.txt
-src/tradecli.egg-info/dependency_links.txt
-src/tradecli.egg-info/entry_points.txt
-src/tradecli.egg-info/requires.txt
-src/tradecli.egg-info/top_level.txt

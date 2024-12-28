@@ -1,0 +1,16 @@
+# Trade Summary
+
+**Execution UID:** 6
+**Trade UID:** trade123
+**RR:** 2.0
+**Entry Price:** 100.0
+**Stop Loss:** 90.0
+**Take Profit:** 120.0
+**Trade Tags:** 
+**Execution Tags:** scaled_in, scaled_out
+**Numeric Tags:** {}
+
+## Overall Statistics
+Trade count: 1, Average RR: 2.00
+
+[Back to Index](index.md)

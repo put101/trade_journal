@@ -1,12 +1,12 @@
 # System Overview
 
 ## Introduction
-The Trading Journal System is designed to help traders manage and analyze their trades efficiently. It provides functionalities to add, update, list, and show trade details, along with calculating various metrics such as risk, planned risk-reward ratio (RR), actual RR, theoretical RR, and monetary outcome.
+The Trading Journal System is designed to help traders manage and analyze their trades efficiently. It provides functionalities to add, update, list, and show trade details, along with calculating various metrics such as risk, planned risk-reward ratio (RR).
 
 ## Components
 
 ### 1. Trade Class
-- Represents a trade with attributes like identifier, entry timestamp, symbol, lots, risk, account, balance, tags, planned RR, actual RR, theoretical RR, outcome.
+- Represents a trade with attributes like identifier, entry timestamp, symbol, lots, risk, account, balance, tags, planned RR.
 - Methods:
   - `__repr__`: Returns a string representation of the trade.
   - `to_yaml`: Converts the trade object to YAML format.
@@ -14,8 +14,8 @@ The Trading Journal System is designed to help traders manage and analyze their 
 ### 2. TradeBuilder Class
 - A builder pattern class to create and configure Trade objects.
 - Methods:
-  - Setters for various trade attributes (identifier, symbol, lots, risk, account, balance, tags, planned RR, actual RR, theoretical RR, outcome).
-  - Calculation methods for risk, planned RR, actual RR, theoretical RR, and outcome.
+  - Setters for various trade attributes (identifier, symbol, lots, risk, account, balance, tags, planned RR).
+  - Calculation methods for risk, planned RR.
   - `build`: Constructs and returns a Trade object.
 
 ### 3. Setup Class
