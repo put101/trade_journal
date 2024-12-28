@@ -151,7 +151,6 @@ journal.add_trade(t)
 position = TradePosition(trade_uid="3", entry_price=1.3000, sl_price=1.2970, tp_price=1.3300)
 position.add_tags_to_trade(t)
 EntryTime(entry_time=pd.Timestamp("2024-12-27 10:00:01")).add_tags_to_trade(t)
-RR.add_tags_to_trade(t)
 
 t = t.copy()
 t.uid = "4"
@@ -165,6 +164,7 @@ journal.add_trade(t)
 # add defaults to all trades
 for trade in journal.trades:
     Sessions.add_tags_to_trade(trade)
+    RR.add_tags_to_trade(trade)
     
 print(journal.trades)
 

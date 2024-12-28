@@ -64,7 +64,7 @@ class TradeJournal:
             "## Trades"
         ]
         for trade in self.trades:
-            lines.append(f"- Trade {trade.uid}")
+            lines.append(f"- [Trade {trade.uid}](trade_{trade.uid}.md)")
         with open(index_path, 'w') as index_file:
             index_file.write("\n".join(lines))
 
