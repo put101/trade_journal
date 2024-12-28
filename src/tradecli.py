@@ -52,7 +52,11 @@ class TradeJournal:
         if df.empty:
             return "No trades found."
         trade_count = df['trade_uid'].nunique()
-        return f"Trade count: {trade_count}"
+        
+        n_long = df[df['side'] == 'long'].shape[0]
+        n_short = df[df['side'] == 'short'].shape[0]
+        
+        return f"Trade count: {trade_count}\nLong trades: {n_long}\nShort trades: {n_short}"
 
     def write_index_markdown(self, output_dir: str):
         index_path = os.path.join(output_dir, "index.md")
