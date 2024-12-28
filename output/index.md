@@ -1,7 +1,9 @@
 # Trade Journal Index
 ## Summary Statistics
 Trade count: 4
+
 Long trades: 0
+
 Short trades: 4
 ## Trades
 - [Trade 1](trade_1.md)

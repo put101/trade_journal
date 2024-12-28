@@ -24,6 +24,9 @@ class Trade:
     
     def add_tag(self, key: str, value: Union[bool, float]):
         self.tags.append(Tag(key=key, value=value, timestamp=None))
+        
+    def has_tag(self, key: str) -> bool:
+        return any(tag.key == key for tag in self.tags)
 
     def copy(self):
         return copy.deepcopy(self)
@@ -56,7 +59,7 @@ class TradeJournal:
         n_long = df[df['side'] == 'long'].shape[0]
         n_short = df[df['side'] == 'short'].shape[0]
         
-        return f"Trade count: {trade_count}\nLong trades: {n_long}\nShort trades: {n_short}"
+        return f"Trade count: {trade_count}\n\nLong trades: {n_long}\n\nShort trades: {n_short}"
 
     def write_index_markdown(self, output_dir: str):
         index_path = os.path.join(output_dir, "index.md")

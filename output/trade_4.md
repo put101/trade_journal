@@ -5,7 +5,9 @@
 
 ## Overall Statistics
 Trade count: 4
+
 Long trades: 0
+
 Short trades: 4
 
 [Back to Index](index.md)
