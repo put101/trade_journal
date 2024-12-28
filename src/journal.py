@@ -3,6 +3,9 @@ from tradecli import *
 import markdown
 import os
 import random
+import logging
+
+logging.basicConfig(level=logging.INFO)
 random.seed(43)
 
 class TF:    
@@ -231,6 +234,7 @@ class RR:
 
 journal = TradeJournal()
 
+logging.info("Creating initial trades")
 t = Trade(uid="1")
 t.add_tag(PA.type_1_(TF.m1), True)
 t.add_tag(TYPE_3_M15, True)
@@ -276,6 +280,7 @@ confidence_levels = [1, 2, 3, 4, 5]
 management_strategies = [RiskManagement.NO_MANAGEMENT, RiskManagement.BE_AFTER_1R, RiskManagement.BE_AFTER_PUSH, RiskManagement.CLOSE_EARLY]
 timeframes = TF.ALL_TAGS
 
+logging.info("Adding more trades to the journal")
 # Add more entries to the journal using a loop with random choices
 for i in range(5, 15):
     t = Trade(uid=str(i))
@@ -295,6 +300,7 @@ for i in range(5, 15):
     PotentialReward.add_tags_to_trade(t, round(entry_price + random.uniform(0.01, 0.05), 4))
     RiskManagement.add_tags_to_trade(t, random.choice(management_strategies))
 
+logging.info("Adding default tags to all trades")
 # add defaults to all trades or certain tags that should not be None
 for trade in journal.trades:
     Sessions.add_tags_to_trade(trade)
@@ -303,6 +309,5 @@ for trade in journal.trades:
     InitialReward.add_tags_to_trade(trade)
     RiskManagement.add_tags_to_trade(trade, RiskManagement.NO_MANAGEMENT)
     
-print(journal.trades)
-
+logging.info("Converting journal trades to DataFrame")
 full_df = journal.to_dataframe()

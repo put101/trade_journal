@@ -7,6 +7,10 @@ import copy
 from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
 import seaborn as sns
+import itertools
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 @dataclass
 class Tag:
@@ -37,20 +41,26 @@ class TradeJournal:
     trades: List[Trade] = field(default_factory=list)
 
     def add_trade(self, trade: Trade):
+        logging.info(f"Adding trade with UID: {trade.uid}")
         self.trades.append(trade)
 
     def to_dataframe(self) -> pd.DataFrame:
+        logging.info("Converting trades to DataFrame")
         data = []
         all_tags = set(tag.key for trade in self.trades for tag in trade.tags)
+        logging.info(f"All tags collected: {all_tags}")
         for trade in self.trades:
             row = {'trade_uid': trade.uid}
             for tag in all_tags:
                 tag_value = next((t.value for t in trade.tags if t.key == tag), None)
                 row[tag] = tag_value
             data.append(row)
+            logging.info(f"Processed trade UID: {trade.uid}")
+        logging.info("Conversion to DataFrame completed")
         return pd.DataFrame(data)
 
     def get_simple_statistics(self) -> str:
+        logging.info("Calculating simple statistics")
         df = self.to_dataframe()
         if df.empty:
             return "No trades found."
@@ -79,6 +89,7 @@ class TradeJournal:
                 f"NaNs or skipped values: {nans}")
 
     def get_tags_statistics(self) -> pd.DataFrame:
+        logging.info("Calculating tags statistics")
         df = self.to_dataframe()
         if df.empty:
             return pd.DataFrame()
@@ -96,6 +107,7 @@ class TradeJournal:
         return pd.DataFrame(tag_data)
 
     def analyze_tag_relevance(self) -> pd.DataFrame:
+        logging.info("Analyzing tag relevance")
         df = self.to_dataframe()
         if df.empty:
             return pd.DataFrame()
@@ -125,6 +137,7 @@ class TradeJournal:
         return pd.DataFrame(analysis_data)
 
     def plot_statistics(self, output_dir: str):
+        logging.info("Plotting statistics")
         df = self.to_dataframe()
         if df.empty:
             return
@@ -150,10 +163,14 @@ class TradeJournal:
         plt.close()
 
     def write_index_markdown(self, output_dir: str):
+        logging.info("Writing index markdown")
         index_path = os.path.join(output_dir, "index.md")
         stats = self.get_simple_statistics()
         df = self.to_dataframe()
         tag_relevance_df = self.analyze_tag_relevance()
+        best_combinations = self.find_best_tag_combinations(top_n=5)
+        best_subsets = self.find_best_tag_subsets(top_n=5)
+        
         lines = [
             "# Trade Journal Index",
             "## Summary Statistics",
@@ -165,6 +182,10 @@ class TradeJournal:
             self.to_dataframe().describe().to_markdown(index=False),
             "### Tags Relevance",
             tag_relevance_df.to_markdown(index=False),
+            "### Best Tag Combinations",
+            best_combinations.to_markdown(index=False),
+            "### Best Tag Subsets",
+            best_subsets.to_markdown(index=False),
             "## Trades",
             "![Trade Outcomes](trade_outcomes.png)",
             "This plot shows the distribution of trade outcomes (win/loss).",
@@ -179,6 +200,7 @@ class TradeJournal:
             index_file.write("\n".join(lines))
 
     def to_markdown(self, output_dir: str):
+        logging.info("Converting trades to markdown")
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
         for trade in self.trades:
@@ -198,4 +220,59 @@ class TradeJournal:
             
         self.write_index_markdown(output_dir)
         self.plot_statistics(output_dir)
+
+    def find_best_tag_combinations(self, top_n: int = 5) -> pd.DataFrame:
+        logging.info("Finding best tag combinations")
+        df = self.to_dataframe()
+        if df.empty:
+            return pd.DataFrame()
+        
+        tags = [col for col in df.columns if col not in ['trade_uid', 'return', 'outcome']]
+        results = []
+        
+        for tag in tags:
+            tag_df = df.dropna(subset=[tag])
+            if tag_df.empty:
+                continue
+            
+            winrate = tag_df[tag_df['outcome'] == 'win'].shape[0] / tag_df.shape[0] * 100
+            expectancy = tag_df['return'].mean()
+            
+            results.append({
+                'tag': tag,
+                'count': tag_df.shape[0],
+                'winrate': winrate,
+                'expectancy': expectancy
+            })
+        
+        results_df = pd.DataFrame(results)
+        return results_df.sort_values(by='expectancy', ascending=False).head(top_n)
+
+    def find_best_tag_subsets(self, top_n: int = 5) -> pd.DataFrame:
+        logging.info("Finding best tag subsets")
+        df = self.to_dataframe()
+        if df.empty:
+            return pd.DataFrame()
+        
+        tags = [col for col in df.columns if col not in ['trade_uid', 'return', 'outcome']]
+        results = []
+        
+        for i in range(1, len(tags) + 1):
+            for subset in itertools.combinations(tags, i):
+                subset_df = df.dropna(subset=subset)
+                if subset_df.empty:
+                    continue
+                
+                winrate = subset_df[subset_df['outcome'] == 'win'].shape[0] / subset_df.shape[0] * 100
+                expectancy = subset_df['return'].mean()
+                
+                results.append({
+                    'tags': subset,
+                    'count': subset_df.shape[0],
+                    'winrate': winrate,
+                    'expectancy': expectancy
+                })
+        
+        results_df = pd.DataFrame(results)
+        return results_df.sort_values(by='expectancy', ascending=False).head(top_n)
 
