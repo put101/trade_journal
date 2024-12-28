@@ -37,6 +37,9 @@ class TradePosition:
     TAG_TP_PRICE = "tp_price"
     TAG_SL_DISTANCE = "SL_distance"
     TAG_TP_DISTANCE = "TP_distance"
+    TAG_SIDE = "side" # long, short
+    TAG_RETURN = "return"
+    
     
     DEFAULT_PRICES = None
     
@@ -57,6 +60,10 @@ class TradePosition:
             trade.add_tag("SL_distance", self.entry_price - self.sl_price)
         if self.entry_price is not None and self.tp_price is not None:
             trade.add_tag("TP_distance", self.tp_price - self.entry_price)
+        if self.entry_price is not None and self.close_price is not None:
+            trade.add_tag("return", self.close_price - self.entry_price)
+        if self.entry_price is not None and self.sl_price is not None:
+            trade.add_tag("side", "long" if self.entry_price < self.sl_price else "short")
 
 class EntryTime:
     TAG_ENTRY_TIME = "entry_time"
