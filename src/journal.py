@@ -280,4 +280,3 @@ for trade in journal.trades:
 print(journal.trades)
 
 full_df = journal.to_dataframe()
-#Outcome.add_tags_to_df(full_df)
