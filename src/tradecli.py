@@ -10,7 +10,11 @@ import seaborn as sns
 import itertools
 import logging
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
 @dataclass
 class Tag:
@@ -45,18 +49,14 @@ class TradeJournal:
         self.trades.append(trade)
 
     def to_dataframe(self) -> pd.DataFrame:
-        logging.info("Converting trades to DataFrame")
         data = []
         all_tags = set(tag.key for trade in self.trades for tag in trade.tags)
-        logging.info(f"All tags collected: {all_tags}")
         for trade in self.trades:
             row = {'trade_uid': trade.uid}
             for tag in all_tags:
                 tag_value = next((t.value for t in trade.tags if t.key == tag), None)
                 row[tag] = tag_value
             data.append(row)
-            logging.info(f"Processed trade UID: {trade.uid}")
-        logging.info("Conversion to DataFrame completed")
         return pd.DataFrame(data)
 
     def get_simple_statistics(self) -> str:
@@ -168,7 +168,9 @@ class TradeJournal:
         stats = self.get_simple_statistics()
         df = self.to_dataframe()
         tag_relevance_df = self.analyze_tag_relevance()
-        best_combinations = self.find_best_tag_combinations(top_n=5)
+        logging.info("Finding best single tags and subsets")
+        best_tags = self.find_best_tags(top_n=5)
+        logging.info("Finding best tag subsets")
         best_subsets = self.find_best_tag_subsets(top_n=5)
         
         lines = [
@@ -182,8 +184,8 @@ class TradeJournal:
             self.to_dataframe().describe().to_markdown(index=False),
             "### Tags Relevance",
             tag_relevance_df.to_markdown(index=False),
-            "### Best Tag Combinations",
-            best_combinations.to_markdown(index=False),
+            "### Best Single Tags",
+            best_tags.to_markdown(index=False),
             "### Best Tag Subsets",
             best_subsets.to_markdown(index=False),
             "## Trades",
@@ -221,8 +223,8 @@ class TradeJournal:
         self.write_index_markdown(output_dir)
         self.plot_statistics(output_dir)
 
-    def find_best_tag_combinations(self, top_n: int = 5) -> pd.DataFrame:
-        logging.info("Finding best tag combinations")
+    def find_best_tags(self, top_n: int = 5) -> pd.DataFrame:
+        logging.info("Finding best single tags")
         df = self.to_dataframe()
         if df.empty:
             return pd.DataFrame()
@@ -248,7 +250,7 @@ class TradeJournal:
         results_df = pd.DataFrame(results)
         return results_df.sort_values(by='expectancy', ascending=False).head(top_n)
 
-    def find_best_tag_subsets(self, top_n: int = 5) -> pd.DataFrame:
+    def find_best_tag_subsets(self, top_n: int = 5, max_subset_size: int = 3) -> pd.DataFrame:
         logging.info("Finding best tag subsets")
         df = self.to_dataframe()
         if df.empty:
@@ -257,7 +259,7 @@ class TradeJournal:
         tags = [col for col in df.columns if col not in ['trade_uid', 'return', 'outcome']]
         results = []
         
-        for i in range(1, len(tags) + 1):
+        for i in range(1, min(len(tags), max_subset_size) + 1):
             for subset in itertools.combinations(tags, i):
                 subset_df = df.dropna(subset=subset)
                 if subset_df.empty:

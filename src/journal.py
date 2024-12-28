@@ -19,6 +19,7 @@ class TF:
     w="w"
     M="M"
     ALL_TAGS = [m1, m5, m15, m30, h1, h4, d, w, M]
+    IGNORED_TAGS = []
 
 class PA:
     DEFAULT = False
@@ -29,6 +30,8 @@ class PA:
         return f'type_2_{tf}'
     def type_3_(tf:str):
         return f'type_3_{tf}'
+    
+    IGNORED_TAGS = []
 
 class Confidence:
     TAG_CONFIDENCE = "confidence"
@@ -38,6 +41,8 @@ class Confidence:
         assert confidence is not None
         trade.add_tag("confidence", confidence)
     
+    IGNORED_TAGS = []
+
 class MultiTimeframeAnalysis:
     TAG_HTF_POI_LTF_CONFIRMATION = "htf_poi_ltf_confirmation"
     DEFAULT_HTF_POI_LTF_CONFIRMATION = None
@@ -46,6 +51,8 @@ class MultiTimeframeAnalysis:
     def add_tags_to_trade(trade: Trade, htf_poi_ltf_confirmation: bool):
         assert htf_poi_ltf_confirmation is not None
         trade.add_tag("htf_poi_ltf_confirmation", htf_poi_ltf_confirmation)
+    
+    IGNORED_TAGS = []
 
 class RiskManagement:
     """Self explanatory.
@@ -58,6 +65,8 @@ class RiskManagement:
     def add_tags_to_trade(trade: Trade, management_strategy: str):
         if not trade.has_tag("management_strategy"):
             trade.add_tag("management_strategy", management_strategy)
+    
+    IGNORED_TAGS = []
 
 class Outcome:
     WIN = "win"
@@ -86,6 +95,8 @@ class Outcome:
     def add_tags_to_df(df: pd.DataFrame):
         df['outcome'] = df['return'].apply(lambda x: Outcome.WIN if x > 0 else (Outcome.LOSS if x < 0 else Outcome.BREAKEVEN))
     
+    IGNORED_TAGS = []
+
 TYPE_3_M15 = PA.type_3_(TF.m15)
         
 ALL_TAGS = frozenset(TF.ALL_TAGS + [PA.type_1_(tf) for tf in TF.ALL_TAGS] + [PA.type_2_(tf) for tf in TF.ALL_TAGS])
@@ -123,6 +134,8 @@ class TradePosition:
             trade.add_tag("return", self.close_price - self.entry_price)
         if self.entry_price is not None and self.sl_price is not None:
             trade.add_tag("side", "long" if self.entry_price > self.sl_price else "short")
+    
+    IGNORED_TAGS = ["entry_price", "sl_price", "tp_price", "SL_distance", "TP_distance"]
 
 class InitialReward:
     """Represents the initial planned reward and risk reward ratio of a trade.
@@ -147,6 +160,8 @@ class InitialReward:
             rr = InitialReward.calculate_initial_risk_reward(entry_price, sl_price, tp_price)
             trade.add_tag("initial_risk_reward", rr)
             trade.add_tag("initial_return", InitialReward.calculate_initial_return(entry_price, tp_price))
+    
+    IGNORED_TAGS = []
 
 class PotentialReward:
     TAG_RR = 'potential_risk_reward'
@@ -170,6 +185,8 @@ class PotentialReward:
             trade.add_tag("potential_risk_reward", rr)
             trade.add_tag("potential_return", PotentialReward.calculate_potential_return(entry_price, potential_price))
             trade.add_tag("potential_price", potential_price)
+    
+    IGNORED_TAGS = ["potential_price"]
 
 class EntryTime:
     TAG_ENTRY_TIME = "entry_time"
@@ -186,6 +203,8 @@ class EntryTime:
                 if tag.key == EntryTime.TAG_ENTRY_TIME:
                     tag.value = self.entry_time
                     break
+    
+    IGNORED_TAGS = ["entry_time"]
 
 class Sessions:
     TAG_SESSION = "session"
@@ -214,7 +233,8 @@ class Sessions:
         if ts is not None:
             session = Sessions.session_from_ts(ts)
             trade.add_tag("session", session)
-        
+    
+    IGNORED_TAGS = []
 
 class RR:
     TAG_RR = "risk_reward_ratio"
@@ -231,6 +251,15 @@ class RR:
         if entry_price is not None and sl_price is not None and tp_price is not None:
             rr = RR.calculate_risk_reward_ratio(entry_price, sl_price, tp_price)
             trade.add_tag("risk_reward_ratio", rr)
+    
+    IGNORED_TAGS = []
+
+def get_all_ignored_tags() -> List[str]:
+    ignored_tags = []
+    classes = [TF, PA, Confidence, MultiTimeframeAnalysis, RiskManagement, Outcome, TradePosition, InitialReward, PotentialReward, EntryTime, Sessions, RR]
+    for cls in classes:
+        ignored_tags.extend(cls.IGNORED_TAGS)
+    return ignored_tags
 
 journal = TradeJournal()
 
@@ -311,3 +340,8 @@ for trade in journal.trades:
     
 logging.info("Converting journal trades to DataFrame")
 full_df = journal.to_dataframe()
+
+get_number_of_trades = lambda df: len(df)
+get_set_of_tags = lambda df: frozenset([tag for tag in df.columns if tag != "uid"])
+get_number_of_tags = lambda df: len(get_set_of_tags(df))
+get_number_of_trades_with_tag = lambda df, tag: len(df[df[tag].notnull()])
