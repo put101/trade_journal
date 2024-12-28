@@ -95,6 +95,35 @@ class TradeJournal:
             })
         return pd.DataFrame(tag_data)
 
+    def analyze_tag_relevance(self) -> pd.DataFrame:
+        df = self.to_dataframe()
+        if df.empty:
+            return pd.DataFrame()
+        
+        tags = [col for col in df.columns if col not in ['trade_uid', 'return', 'outcome']]
+        analysis_data = []
+        
+        for tag in tags:
+            tag_df = df.dropna(subset=[tag])
+            if tag_df.empty:
+                continue
+            
+            winrate = tag_df[tag_df['outcome'] == 'win'].shape[0] / tag_df.shape[0] * 100
+            expectancy = tag_df['return'].mean()
+            skipped = df.shape[0] - tag_df.shape[0]
+            nans = df[tag].isnull().sum()
+            
+            analysis_data.append({
+                'tag': tag,
+                'count': tag_df.shape[0],
+                'winrate': winrate,
+                'expectancy': expectancy,
+                'skipped': skipped,
+                'nans': nans
+            })
+        
+        return pd.DataFrame(analysis_data)
+
     def plot_statistics(self, output_dir: str):
         df = self.to_dataframe()
         if df.empty:
@@ -124,6 +153,7 @@ class TradeJournal:
         index_path = os.path.join(output_dir, "index.md")
         stats = self.get_simple_statistics()
         df = self.to_dataframe()
+        tag_relevance_df = self.analyze_tag_relevance()
         lines = [
             "# Trade Journal Index",
             "## Summary Statistics",
@@ -133,6 +163,8 @@ class TradeJournal:
             self.get_tags_statistics().to_markdown(index=False),
             "### Tags Distribution",
             self.to_dataframe().describe().to_markdown(index=False),
+            "### Tags Relevance",
+            tag_relevance_df.to_markdown(index=False),
             "## Trades",
             "![Trade Outcomes](trade_outcomes.png)",
             "This plot shows the distribution of trade outcomes (win/loss).",
