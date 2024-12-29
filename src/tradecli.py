@@ -48,9 +48,8 @@ class TradeJournal:
     trades: List[Trade] = field(default_factory=list)
     PIVOT_TAGS: List[str] = field(default_factory=lambda: ['confidence'])
 
-    @staticmethod
-    def get_pivot_tags() -> List[str]:
-        return TradeJournal.PIVOT_TAGS
+    def get_pivot_tags(self) -> List[str]:
+        return self.PIVOT_TAGS
 
     def add_trade(self, trade: Trade):
         logging.info(f"Adding trade with UID: {trade.uid}")
