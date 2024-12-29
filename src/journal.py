@@ -61,7 +61,7 @@ class Confidence:
             trade.add_tag(f"confidence_{level}", confidence == level)
         trade.add_tag(Confidence.TAG_NUMERICAL_CONFIDENCE, confidence)  # Add numerical confidence
     
-    IGNORED_TAGS = [f"confidence_{level}" for level in LEVELS] + [TAG_NUMERICAL_CONFIDENCE]
+    IGNORED_TAGS = [TAG_NUMERICAL_CONFIDENCE]
 
 class MultiTimeframeAnalysis:
     TAG_HTF_POI_LTF_CONFIRMATION = "htf_poi_ltf_confirmation"
@@ -183,7 +183,7 @@ class InitialReward:
             trade.add_tag("initial_risk_reward", rr)
             trade.add_tag("initial_return", InitialReward.calculate_initial_return(entry_price, tp_price))
     
-    IGNORED_TAGS = []
+    IGNORED_TAGS = [TAG_RR, TAG_RETURN]
 
 class PotentialReward:
     TAG_RR = 'potential_risk_reward'
@@ -208,7 +208,7 @@ class PotentialReward:
             trade.add_tag("potential_return", PotentialReward.calculate_potential_return(entry_price, potential_price))
             trade.add_tag("potential_price", potential_price)
     
-    IGNORED_TAGS = ["potential_price", "potential_risk_reward", "potential_return"]
+    IGNORED_TAGS = [TAG_RR, TAG_RETURN, TAG_PRICE]
 
 class EntryTime:
     TAG_ENTRY_TIME = "entry_time"
@@ -368,9 +368,11 @@ for trade in j.trades:
         if not trade.has_tag(tag):
             trade.add_tag(tag, False)
     
-    
 logging.info("Converting journal trades to DataFrame")
 full_df = j.to_dataframe()
+
+# ADDITIONAL FEATURES
+PA.add_tags_to_df(full_df)
 
 get_number_of_trades = lambda df: len(df)
 get_set_of_tags = lambda df: frozenset([tag for tag in df.columns if tag != "uid"])
