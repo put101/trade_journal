@@ -19,7 +19,7 @@ class TF:
     w="w"
     M="M"
     ALL_TAGS = [m1, m5, m15, m30, h1, h4, d, w, M]
-    IGNORED_TAGS = []
+    IGNORED_TAGS = [t for t in ALL_TAGS] 
 
 class PA:
     DEFAULT = False
@@ -135,7 +135,9 @@ class TradePosition:
         if self.entry_price is not None and self.sl_price is not None:
             trade.add_tag("side", "long" if self.entry_price > self.sl_price else "short")
     
-    IGNORED_TAGS = ["entry_price", "sl_price", "tp_price", "SL_distance", "TP_distance"]
+    IGNORED_TAGS = [TAG_ENTRY_PRICE,TAG_SL_PRICE,TAG_TP_PRICE,TAG_SL_DISTANCE,
+                    TAG_TP_DISTANCE,TAG_RETURN]
+    
 
 class InitialReward:
     """Represents the initial planned reward and risk reward ratio of a trade.
@@ -186,7 +188,7 @@ class PotentialReward:
             trade.add_tag("potential_return", PotentialReward.calculate_potential_return(entry_price, potential_price))
             trade.add_tag("potential_price", potential_price)
     
-    IGNORED_TAGS = ["potential_price"]
+    IGNORED_TAGS = ["potential_price", "potential_risk_reward", "potential_return"]
 
 class EntryTime:
     TAG_ENTRY_TIME = "entry_time"
@@ -261,13 +263,13 @@ def get_all_ignored_tags() -> List[str]:
         ignored_tags.extend(cls.IGNORED_TAGS)
     return ignored_tags
 
-journal = TradeJournal()
+j = TradeJournal()
 
 logging.info("Creating initial trades")
 t = Trade(uid="1")
 t.add_tag(PA.type_1_(TF.m1), True)
 t.add_tag(TYPE_3_M15, True)
-journal.add_trade(t)
+j.add_trade(t)
 position = TradePosition(trade_uid="1", entry_price=1.1000, sl_price=1.0950, tp_price=1.1100)
 position.add_tags_to_trade(t)
 EntryTime(entry_time=datetime.now()).add_tags_to_trade(t)
@@ -275,7 +277,7 @@ RR.add_tags_to_trade(t)
 
 t = Trade(uid="2")
 t.add_tag(PA.type_2_(TF.h1), True)
-journal.add_trade(t)
+j.add_trade(t)
 position = TradePosition(trade_uid="2", entry_price=1.2000, sl_price=1.1850, tp_price=1.2100, close_price=1.1855)
 position.add_tags_to_trade(t)
 EntryTime(entry_time=datetime.now()).add_tags_to_trade(t)
@@ -285,7 +287,7 @@ MultiTimeframeAnalysis.add_tags_to_trade(t, True)
 
 t = Trade(uid="3")
 t.add_tag("SL_distance", 0.5)
-journal.add_trade(t)
+j.add_trade(t)
 position = TradePosition(trade_uid="3", entry_price=1.3000, sl_price=1.2970, tp_price=1.3300)
 position.add_tags_to_trade(t)
 EntryTime(entry_time=pd.Timestamp("2024-12-27 10:00:01")).add_tags_to_trade(t)
@@ -299,7 +301,7 @@ position = TradePosition(trade_uid="4", entry_price=1.3000, sl_price=1.2950, tp_
 position.add_tags_to_trade(t)
 EntryTime(entry_time=pd.Timestamp("2024-12-25 10:00:00")).add_tags_to_trade(t)
 RR.add_tags_to_trade(t)
-journal.add_trade(t)
+j.add_trade(t)
 PotentialReward.add_tags_to_trade(t, 1.3150)
 Confidence.add_tags_to_trade(t, 4)
 MultiTimeframeAnalysis.add_tags_to_trade(t, True)
@@ -315,7 +317,7 @@ for i in range(5, 15):
     t = Trade(uid=str(i))
     t.add_tag(random.choice([PA.type_1_(tf) for tf in timeframes]), True)
     t.add_tag(random.choice([PA.type_2_(tf) for tf in timeframes]), True)
-    journal.add_trade(t)
+    j.add_trade(t)
     entry_price = round(1.1000 + random.uniform(0.01, 0.05), 4)
     sl_price = round(entry_price - random.uniform(0.005, 0.01), 4)
     tp_price = round(entry_price + random.uniform(0.01, 0.05), 4)
@@ -331,7 +333,7 @@ for i in range(5, 15):
 
 logging.info("Adding default tags to all trades")
 # add defaults to all trades or certain tags that should not be None
-for trade in journal.trades:
+for trade in j.trades:
     Sessions.add_tags_to_trade(trade)
     RR.add_tags_to_trade(trade)
     Outcome.add_tags_to_trade_auto(trade)
@@ -339,7 +341,7 @@ for trade in journal.trades:
     RiskManagement.add_tags_to_trade(trade, RiskManagement.NO_MANAGEMENT)
     
 logging.info("Converting journal trades to DataFrame")
-full_df = journal.to_dataframe()
+full_df = j.to_dataframe()
 
 get_number_of_trades = lambda df: len(df)
 get_set_of_tags = lambda df: frozenset([tag for tag in df.columns if tag != "uid"])

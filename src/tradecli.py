@@ -9,6 +9,9 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import itertools
 import logging
+from src.journal import *
+import src
+import src.journal
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -176,6 +179,8 @@ class TradeJournal:
         logging.info("Finding best tag subsets")
         best_subsets = self.find_best_tag_subsets(top_n=5)
         
+        ignored_tags = src.journal.get_all_ignored_tags()
+        
         lines = [
             "# Trade Journal Index",
             "## Summary Statistics",
@@ -191,6 +196,8 @@ class TradeJournal:
             best_tags.to_markdown(index=False),
             "### Best Tag Subsets",
             best_subsets.to_markdown(index=False),
+            "## Ignored Tags",
+            ", ".join(ignored_tags),
             "## Trades",
             "![Trade Outcomes](trade_outcomes.png)",
             "This plot shows the distribution of trade outcomes (win/loss).",
@@ -232,7 +239,8 @@ class TradeJournal:
         if df.empty:
             return pd.DataFrame()
         
-        tags = [col for col in df.columns if col not in ['trade_uid', 'return', 'outcome']]
+        ignored_tags = src.journal.get_all_ignored_tags()
+        tags = [col for col in df.columns if col not in ['trade_uid', 'return', 'outcome'] and col not in ignored_tags]
         results = []
         
         for tag in tags:
@@ -259,7 +267,8 @@ class TradeJournal:
         if df.empty:
             return pd.DataFrame()
         
-        tags = [col for col in df.columns if col not in ['trade_uid', 'return', 'outcome']]
+        ignored_tags = src.journal.get_all_ignored_tags()
+        tags = [col for col in df.columns if col not in ['trade_uid', 'return', 'outcome'] and col not in ignored_tags]
         results = []
         
         for i in range(1, min(len(tags), max_subset_size) + 1):
