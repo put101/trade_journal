@@ -32,16 +32,36 @@ class PA:
         return f'type_3_{tf}'
     
     IGNORED_TAGS = []
+    
+    @staticmethod
+    def ALL_TAGS():
+        return [PA.type_1_(tf) for tf in TF.ALL_TAGS] + [PA.type_2_(tf) for tf in TF.ALL_TAGS] + [PA.type_3_(tf) for tf in TF.ALL_TAGS]
+    
+    def has_PA_tags(trade: Trade) -> bool:
+        return any(t for t in trade.tags if t.key in PA.ALL_TAGS)
+
+    def add_tags_to_df(df: pd.DataFrame):
+        # Add additional features/tags
+        df['has_type_1'] = df[[col for col in df.columns if col.startswith('type_1_')]].any(axis=1)
+        df['has_type_2'] = df[[col for col in df.columns if col.startswith('type_2_')]].any(axis=1)
+        df['has_type_3'] = df[[col for col in df.columns if col.startswith('type_3_')]].any(axis=1)
+        df['has_time_frame'] = df[[col for col in df.columns if col in TF.ALL_TAGS]].any(axis=1)
+        
 
 class Confidence:
     TAG_CONFIDENCE = "confidence"
+    TAG_NUMERICAL_CONFIDENCE = "numerical_confidence"
     DEFAULT_CONFIDENCE = None
+    LEVELS = [1, 2, 3, 4, 5]
     
+    @staticmethod
     def add_tags_to_trade(trade: Trade, confidence: int):
-        assert confidence is not None
-        trade.add_tag("confidence", confidence)
+        assert confidence in Confidence.LEVELS
+        for level in Confidence.LEVELS:
+            trade.add_tag(f"confidence_{level}", confidence == level)
+        trade.add_tag(Confidence.TAG_NUMERICAL_CONFIDENCE, confidence)  # Add numerical confidence
     
-    IGNORED_TAGS = []
+    IGNORED_TAGS = [f"confidence_{level}" for level in LEVELS] + [TAG_NUMERICAL_CONFIDENCE]
 
 class MultiTimeframeAnalysis:
     TAG_HTF_POI_LTF_CONFIRMATION = "htf_poi_ltf_confirmation"
@@ -274,6 +294,7 @@ position = TradePosition(trade_uid="1", entry_price=1.1000, sl_price=1.0950, tp_
 position.add_tags_to_trade(t)
 EntryTime(entry_time=datetime.now()).add_tags_to_trade(t)
 RR.add_tags_to_trade(t)
+Confidence.add_tags_to_trade(t, 3)  # Ensure confidence is added
 
 t = Trade(uid="2")
 t.add_tag(PA.type_2_(TF.h1), True)
@@ -283,6 +304,7 @@ position.add_tags_to_trade(t)
 EntryTime(entry_time=datetime.now()).add_tags_to_trade(t)
 RR.add_tags_to_trade(t)
 MultiTimeframeAnalysis.add_tags_to_trade(t, True)
+Confidence.add_tags_to_trade(t, 2)  # Ensure confidence is added
 
 
 t = Trade(uid="3")
@@ -327,7 +349,7 @@ for i in range(5, 15):
     EntryTime(entry_time=datetime.now()).add_tags_to_trade(t)
     RR.add_tags_to_trade(t)
     MultiTimeframeAnalysis.add_tags_to_trade(t, random.choice([True, False]))
-    Confidence.add_tags_to_trade(t, random.choice(confidence_levels))
+    Confidence.add_tags_to_trade(t, random.choice(confidence_levels))  # Ensure confidence is added
     PotentialReward.add_tags_to_trade(t, round(entry_price + random.uniform(0.01, 0.05), 4))
     RiskManagement.add_tags_to_trade(t, random.choice(management_strategies))
 
@@ -338,7 +360,14 @@ for trade in j.trades:
     RR.add_tags_to_trade(trade)
     Outcome.add_tags_to_trade_auto(trade)
     InitialReward.add_tags_to_trade(trade)
+    
+    # DEFAULTS
     RiskManagement.add_tags_to_trade(trade, RiskManagement.NO_MANAGEMENT)
+    # set False for the PA tags that are not set
+    for tag in PA.ALL_TAGS():
+        if not trade.has_tag(tag):
+            trade.add_tag(tag, False)
+    
     
 logging.info("Converting journal trades to DataFrame")
 full_df = j.to_dataframe()
