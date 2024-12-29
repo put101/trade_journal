@@ -62,6 +62,7 @@ class Confidence:
         trade.add_tag(Confidence.TAG_NUMERICAL_CONFIDENCE, confidence)  # Add numerical confidence
     
     IGNORED_TAGS = [TAG_NUMERICAL_CONFIDENCE]
+    CATEGORICAL_TAGS = [f"confidence_{level}" for level in LEVELS]
 
 class MultiTimeframeAnalysis:
     TAG_HTF_POI_LTF_CONFIRMATION = "htf_poi_ltf_confirmation"
@@ -73,6 +74,7 @@ class MultiTimeframeAnalysis:
         trade.add_tag("htf_poi_ltf_confirmation", htf_poi_ltf_confirmation)
     
     IGNORED_TAGS = []
+    CATEGORICAL_TAGS = ["htf_poi_ltf_confirmation"]
 
 class RiskManagement:
     """Self explanatory.
@@ -87,6 +89,7 @@ class RiskManagement:
             trade.add_tag("management_strategy", management_strategy)
     
     IGNORED_TAGS = []
+    CATEGORICAL_TAGS = ["management_strategy"]
 
 class Outcome:
     WIN = "win"
@@ -116,6 +119,7 @@ class Outcome:
         df['outcome'] = df['return'].apply(lambda x: Outcome.WIN if x > 0 else (Outcome.LOSS if x < 0 else Outcome.BREAKEVEN))
     
     IGNORED_TAGS = []
+    CATEGORICAL_TAGS = ["outcome"]
 
 TYPE_3_M15 = PA.type_3_(TF.m15)
         
@@ -277,11 +281,12 @@ class RR:
     IGNORED_TAGS = []
 
 def get_all_ignored_tags() -> List[str]:
-    ignored_tags = []
-    classes = [TF, PA, Confidence, MultiTimeframeAnalysis, RiskManagement, Outcome, TradePosition, InitialReward, PotentialReward, EntryTime, Sessions, RR]
-    for cls in classes:
-        ignored_tags.extend(cls.IGNORED_TAGS)
-    return ignored_tags
+    # Moved to utils.py
+    pass
+
+def get_all_categorical_tags() -> List[str]:
+    # Moved to utils.py
+    pass
 
 j = TradeJournal()
 

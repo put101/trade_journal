@@ -9,13 +9,12 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import itertools
 import logging
-from src.journal import *
-import src.journal
+from src.utils import get_all_categorical_tags, get_all_ignored_tags
 import src
 
 logging.basicConfig(
     level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format='%(asctime)s - %(name)s - %(levellevel)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
@@ -46,10 +45,6 @@ class Trade:
 @dataclass
 class TradeJournal:
     trades: List[Trade] = field(default_factory=list)
-    PIVOT_TAGS: List[str] = field(default_factory=lambda: [])
-
-    def get_pivot_tags(self) -> List[str]:
-        return self.PIVOT_TAGS
 
     def add_trade(self, trade: Trade):
         logging.info(f"Adding trade with UID: {trade.uid}")
@@ -73,7 +68,22 @@ class TradeJournal:
                 logging.debug(f"Converting column {col} to boolean")
                 df[col] = df[col].astype(bool)
         
+        # Convert categorical columns
+        categorical_tags = get_all_categorical_tags()
+        for col in categorical_tags:
+            if col in df.columns:
+                df[col] = df[col].astype('category')
+        
+        # Pivot categorical columns
+        df = self.pivot_categorical_columns(df, categorical_tags)
+        
+        return df
 
+    def pivot_categorical_columns(self, df: pd.DataFrame, categorical_columns: List[str]) -> pd.DataFrame:
+        for col in categorical_columns:
+            if col in df.columns:
+                dummies = pd.get_dummies(df[col], prefix=col)
+                df = pd.concat([df, dummies], axis=1)
         return df
 
     def get_simple_statistics(self) -> str:
@@ -191,7 +201,7 @@ class TradeJournal:
         logging.info("Finding best tag subsets")
         best_subsets = self.find_best_tag_subsets(top_n=5)
         
-        ignored_tags = src.journal.get_all_ignored_tags()
+        ignored_tags = get_all_ignored_tags()
         
         lines = [
             "# Trade Journal Index",
@@ -251,7 +261,7 @@ class TradeJournal:
         if df.empty:
             return pd.DataFrame()
         
-        ignored_tags = src.journal.get_all_ignored_tags()
+        ignored_tags = get_all_ignored_tags()
         tags = [col for col in df.columns if col not in ['trade_uid', 'return', 'outcome'] and col not in ignored_tags]
         results = []
         
@@ -279,7 +289,7 @@ class TradeJournal:
         if df.empty:
             return pd.DataFrame()
         
-        ignored_tags = src.journal.get_all_ignored_tags()
+        ignored_tags = get_all_ignored_tags()
         tags = [col for col in df.columns if col not in ['trade_uid', 'return', 'outcome'] and col not in ignored_tags]
         results = []
         
