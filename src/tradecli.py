@@ -46,6 +46,11 @@ class Trade:
 @dataclass
 class TradeJournal:
     trades: List[Trade] = field(default_factory=list)
+    PIVOT_TAGS: List[str] = field(default_factory=lambda: ['confidence'])
+
+    @staticmethod
+    def get_pivot_tags() -> List[str]:
+        return TradeJournal.PIVOT_TAGS
 
     def add_trade(self, trade: Trade):
         logging.info(f"Adding trade with UID: {trade.uid}")
@@ -116,26 +121,45 @@ class TradeJournal:
             return pd.DataFrame()
         
         tags = [col for col in df.columns if col not in ['trade_uid', 'return', 'outcome']]
+        pivot_tags = self.get_pivot_tags()
         analysis_data = []
         
         for tag in tags:
-            tag_df = df.dropna(subset=[tag])
-            if tag_df.empty:
-                continue
-            
-            winrate = tag_df[tag_df['outcome'] == 'win'].shape[0] / tag_df.shape[0] * 100
-            expectancy = tag_df['return'].mean()
-            skipped = df.shape[0] - tag_df.shape[0]
-            nans = df[tag].isnull().sum()
-            
-            analysis_data.append({
-                'tag': tag,
-                'count': tag_df.shape[0],
-                'winrate': winrate,
-                'expectancy': expectancy,
-                'skipped': skipped,
-                'nans': nans
-            })
+            if tag in pivot_tags:
+                # Pivot the tag levels
+                pivot_df = df.pivot_table(index='trade_uid', columns=tag, values='return', aggfunc='mean').reset_index()
+                for level in pivot_df.columns[1:]:
+                    level_df = pivot_df[['trade_uid', level]].dropna()
+                    if level_df.empty:
+                        continue
+                    winrate = level_df[level_df[level] > 0].shape[0] / level_df.shape[0] * 100
+                    expectancy = level_df[level].mean()
+                    skipped = df.shape[0] - level_df.shape[0]
+                    nans = df[tag].isnull().sum()
+                    analysis_data.append({
+                        'tag': f'{tag}_{level}',
+                        'count': level_df.shape[0],
+                        'winrate': winrate,
+                        'expectancy': expectancy,
+                        'skipped': skipped,
+                        'nans': nans
+                    })
+            else:
+                tag_df = df.dropna(subset=[tag])
+                if tag_df.empty:
+                    continue
+                winrate = tag_df[tag_df['outcome'] == 'win'].shape[0] / tag_df.shape[0] * 100
+                expectancy = tag_df['return'].mean()
+                skipped = df.shape[0] - tag_df.shape[0]
+                nans = df[tag].isnull().sum()
+                analysis_data.append({
+                    'tag': tag,
+                    'count': tag_df.shape[0],
+                    'winrate': winrate,
+                    'expectancy': expectancy,
+                    'skipped': skipped,
+                    'nans': nans
+                })
         
         return pd.DataFrame(analysis_data)
 
