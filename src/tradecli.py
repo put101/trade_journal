@@ -9,8 +9,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import itertools
 import logging
-from src.utils import get_all_categorical_tags, get_all_ignored_tags
-import src
+from utils import Trade, TradeJournal, get_all_categorical_tags, get_all_ignored_tags
 
 logging.basicConfig(
     level=logging.DEBUG,

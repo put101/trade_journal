@@ -1,16 +1,42 @@
 from typing import List
-from src.journal import TF, PA, Confidence, MultiTimeframeAnalysis, RiskManagement, Outcome, TradePosition, InitialReward, PotentialReward, EntryTime, Sessions, RR
+from datetime import datetime
+import pandas as pd
 
-def get_all_ignored_tags() -> List[str]:
-    ignored_tags = []
-    classes = [TF, PA, Confidence, MultiTimeframeAnalysis, RiskManagement, Outcome, TradePosition, InitialReward, PotentialReward, EntryTime, Sessions, RR]
-    for cls in classes:
-        ignored_tags.extend(cls.IGNORED_TAGS)
-    return ignored_tags
+class Trade:
+    def __init__(self, uid: str):
+        self.uid = uid
+        self.tags = []
 
-def get_all_categorical_tags() -> List[str]:
-    categorical_tags = []
-    classes = [Confidence, MultiTimeframeAnalysis, RiskManagement, Outcome]
-    for cls in classes:
-        categorical_tags.extend(cls.CATEGORICAL_TAGS)
-    return categorical_tags
+    def add_tag(self, key: str, value):
+        self.tags.append(Tag(key, value))
+
+    def has_tag(self, key: str) -> bool:
+        return any(tag.key == key for tag in self.tags)
+
+    def get_tags_dict(self):
+        return {tag.key: tag.value for tag in self.tags}
+
+    def copy(self):
+        new_trade = Trade(self.uid)
+        new_trade.tags = self.tags.copy()
+        return new_trade
+
+class TradeJournal:
+    def __init__(self):
+        self.trades = []
+
+    def add_trade(self, trade: Trade):
+        self.trades.append(trade)
+
+    def to_dataframe(self) -> pd.DataFrame:
+        data = []
+        for trade in self.trades:
+            trade_data = trade.get_tags_dict()
+            trade_data['uid'] = trade.uid
+            data.append(trade_data)
+        return pd.DataFrame(data)
+
+class Tag:
+    def __init__(self, key: str, value):
+        self.key = key
+        self.value = value

@@ -1,9 +1,9 @@
 from datetime import datetime
-from tradecli import *
 import markdown
 import os
 import random
 import logging
+from utils import *
 
 logging.basicConfig(level=logging.INFO)
 random.seed(43)
@@ -281,12 +281,18 @@ class RR:
     IGNORED_TAGS = []
 
 def get_all_ignored_tags() -> List[str]:
-    # Moved to utils.py
-    pass
+    ignored_tags = []
+    classes = [TF, PA, Confidence, MultiTimeframeAnalysis, RiskManagement, Outcome, TradePosition, InitialReward, PotentialReward, EntryTime, Sessions, RR]
+    for cls in classes:
+        ignored_tags.extend(cls.IGNORED_TAGS)
+    return ignored_tags
 
 def get_all_categorical_tags() -> List[str]:
-    # Moved to utils.py
-    pass
+    categorical_tags = []
+    classes = [Confidence, MultiTimeframeAnalysis, RiskManagement, Outcome]
+    for cls in classes:
+        categorical_tags.extend(cls.CATEGORICAL_TAGS)
+    return categorical_tags
 
 j = TradeJournal()
 
