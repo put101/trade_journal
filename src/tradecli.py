@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from joblib import Parallel, delayed
 from typing import List, Dict, Union, override
 import pandas as pd
 from datetime import datetime
@@ -212,7 +213,7 @@ class TradeJournal:
         logging.info("Finding best single tags and subsets")
         best_tags = self.find_best_tags(top_n=5)
         logging.info("Finding best tag subsets")
-        best_subsets = self.find_best_tag_subsets(top_n=5)
+        best_subsets = self.find_best_tag_subsets_FULL_PARALLEL(top_n=5)
         
         ignored_tags = self.get_all_ignored_tags()
         
@@ -330,7 +331,7 @@ class TradeJournal:
         results_df = pd.DataFrame(results)
         return results_df.sort_values(by='expectancy', ascending=False).head(top_n)
 
-    def find_best_tag_subsets(self, top_n: int = 5, max_subset_size: int = 3) -> pd.DataFrame:
+    def find_best_tag_subsets_FULL_SERIAL(self, top_n: int = 5, max_subset_size: int = 3) -> pd.DataFrame:
         logging.info("Finding best tag subsets")
         df = self.to_dataframe()
         if df.empty:
@@ -364,4 +365,37 @@ class TradeJournal:
         results_df = pd.DataFrame(results)
         return results_df.sort_values(by='expectancy', ascending=False).head(top_n)
 
+    @staticmethod
+    def calculate_subset(subset, df):
+        subset_df = df.dropna(subset=subset)
+        if subset_df.empty:
+            return None
+        
+        winrate = subset_df[subset_df['outcome'] == 'win'].shape[0] / subset_df.shape[0] * 100
+        expectancy = subset_df['return'].mean()
+        
+        return {
+            'tags': subset,
+            'count': subset_df.shape[0],
+            'winrate': winrate,
+            'expectancy': expectancy
+        }
 
+    def find_best_tag_subsets_FULL_PARALLEL(self, top_n: int = 5, max_subset_size: int = 3) -> pd.DataFrame:
+        logging.info("Finding best tag subsets")
+        df = self.to_dataframe()
+        if df.empty:
+            return pd.DataFrame()
+        
+        ignored_tags = self.get_all_ignored_tags()
+        tags = [col for col in df.columns if col not in ['trade_uid', 'return', 'outcome'] and col not in ignored_tags]
+        results = []
+        
+        logging.info(f"Calculating tag subsets for tags: {tags}")
+        
+        results = Parallel(n_jobs=-1)(delayed(TradeJournal.calculate_subset)(subset, df) for i in range(1, min(len(tags), max_subset_size) + 1) \
+            for subset in itertools.combinations(tags, i))
+        results = [result for result in results if result]
+        
+        results_df = pd.DataFrame(results)
+        return results_df.sort_values(by='expectancy', ascending=False).head(top_n)
