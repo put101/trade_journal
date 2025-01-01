@@ -3,7 +3,7 @@ import markdown
 import os
 import random
 import logging
-from utils import *
+from src.tradecli import * 
 
 logging.basicConfig(level=logging.INFO)
 random.seed(43)
@@ -295,6 +295,8 @@ def get_all_categorical_tags() -> List[str]:
     return categorical_tags
 
 j = TradeJournal()
+j.get_all_categorical_tags = get_all_categorical_tags
+j.get_all_ignored_tags = get_all_ignored_tags
 
 logging.info("Creating initial trades")
 t = Trade(uid="1")

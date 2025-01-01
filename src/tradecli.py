@@ -1,15 +1,19 @@
 from dataclasses import dataclass, field
-from typing import List, Dict, Union
+from typing import List, Dict, Union, override
 import pandas as pd
 from datetime import datetime
 import os
+import pathlib
 import copy
 from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
 import seaborn as sns
 import itertools
 import logging
-from utils import Trade, TradeJournal, get_all_categorical_tags, get_all_ignored_tags
+from tqdm import tqdm
+from sklearn.feature_selection import RFE
+from sklearn.linear_model import LogisticRegression
+
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -44,6 +48,16 @@ class Trade:
 @dataclass
 class TradeJournal:
     trades: List[Trade] = field(default_factory=list)
+    # path to the assets folder inside the project
+    ASSETS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets')
+
+    @override
+    def get_all_categorical_tags(self) -> List[str]:
+        raise NotImplementedError("This method `get_all_categorical_tags`should be implemented in a subclass.")
+    
+    @override
+    def get_all_ignored_tags(self) -> List[str]:
+        raise NotImplementedError("This method should be implemented in a subclass.")
 
     def add_trade(self, trade: Trade):
         logging.info(f"Adding trade with UID: {trade.uid}")
@@ -68,7 +82,7 @@ class TradeJournal:
                 df[col] = df[col].astype(bool)
         
         # Convert categorical columns
-        categorical_tags = get_all_categorical_tags()
+        categorical_tags = self.get_all_categorical_tags()
         for col in categorical_tags:
             if col in df.columns:
                 df[col] = df[col].astype('category')
@@ -200,7 +214,7 @@ class TradeJournal:
         logging.info("Finding best tag subsets")
         best_subsets = self.find_best_tag_subsets(top_n=5)
         
-        ignored_tags = get_all_ignored_tags()
+        ignored_tags = self.get_all_ignored_tags()
         
         lines = [
             "# Trade Journal Index",
@@ -236,14 +250,48 @@ class TradeJournal:
         logging.info("Converting trades to markdown")
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
+        
+        def get_files_for_trades(p: pathlib.Path) -> Dict[str, List[str]]:
+            """Files are structured arbitrarly by the user. 
+            Assets need to be below the ASSETS_PATH folder in any strucutre and files are attributed in named-sorted order
+            to the trade ID if found somewhere in a file's path. This enables the user to structure and name the assets as they like. 
+            """
+            import glob
+            files = {}
+            
+            for trade in self.trades:
+                trade_id = trade.uid
+                files[trade_id] = []
+                for asset in glob.glob(os.path.join(p, '**', '*'), recursive=True):
+                    if trade_id in asset:
+                        files[trade_id].append(asset)
+                # sort the files by name
+                files[trade_id].sort()
+            
+            logging.info("Files for trades found")
+            logging.info(f"Files Found #: {len(files)}, Total Trades #: {len(self.trades)}" \
+                + f"max files for trade: {max([len(files[trade.uid]) for trade in self.trades])}" \
+                + f"min files for trade: {min([len(files[trade.uid]) for trade in self.trades])}" \
+                + f"avg files for trade: {sum([len(files[trade.uid]) for trade in self.trades]) / len(self.trades)}")
+            # do similar descriptive statistics using pandas
+            # pd.DataFrame([len(files[trade.uid]) for trade in self.trades]).describe()
+            file_stats = pd.DataFrame([len(files[trade.uid]) for trade in self.trades])
+            logging.info(f"Descriptive Statistics: {file_stats.describe()}")
+
+            return files
+       
+        assets = get_files_for_trades(self.ASSETS_PATH) 
+        logging.debug(f"Assets: {assets}")
+        
         for trade in self.trades:
             md_path = os.path.join(output_dir, f"trade_{trade.uid}.md")
             md_content = f"# Trade Summary\n\n"
             md_content += f"**Trade UID:** {trade.uid} \n\n"
             md_content += f"**Tags:** {', '.join([f'{tag.key}:{tag.value}' for tag in trade.tags])}\n\n"
+    	    
+            md_content += f"## Assets\n\n"
             
-            #md_content += f"\n\n![Trade Plot](trade_plot_{trade.uid}.png)\n\n"
-                        
+
             md_content += f"## Trade Plot Explanation\n\n"
 
             md_content += "\n[Back to Index](index.md)\n"
@@ -260,7 +308,7 @@ class TradeJournal:
         if df.empty:
             return pd.DataFrame()
         
-        ignored_tags = get_all_ignored_tags()
+        ignored_tags = self.get_all_ignored_tags()
         tags = [col for col in df.columns if col not in ['trade_uid', 'return', 'outcome'] and col not in ignored_tags]
         results = []
         
@@ -288,14 +336,19 @@ class TradeJournal:
         if df.empty:
             return pd.DataFrame()
         
-        ignored_tags = get_all_ignored_tags()
+        ignored_tags = self.get_all_ignored_tags()
         tags = [col for col in df.columns if col not in ['trade_uid', 'return', 'outcome'] and col not in ignored_tags]
         results = []
         
+        logging.info(f"Calculating tag subsets for tags: {tags}")
+        
         for i in range(1, min(len(tags), max_subset_size) + 1):
-            for subset in itertools.combinations(tags, i):
+            logging.debug(f"subsets of N={len(tags)},k={i}: total subsets: {len(list(itertools.combinations(tags, i))):,}")
+            for subset in tqdm(itertools.combinations(tags, i)):
+                logging.debug(f"Calculating subset: {subset}")
                 subset_df = df.dropna(subset=subset)
                 if subset_df.empty:
+                    logging.debug(f"Subset {subset} is empty")
                     continue
                 
                 winrate = subset_df[subset_df['outcome'] == 'win'].shape[0] / subset_df.shape[0] * 100
@@ -310,4 +363,5 @@ class TradeJournal:
         
         results_df = pd.DataFrame(results)
         return results_df.sort_values(by='expectancy', ascending=False).head(top_n)
+
 
