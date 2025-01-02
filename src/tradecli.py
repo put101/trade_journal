@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from joblib import Parallel, delayed
-from typing import List, Dict, Union, override
+from typing import List, Dict, Union, Optional, override
 import pandas as pd
 from datetime import datetime
 import os
@@ -14,6 +14,7 @@ import logging
 from tqdm import tqdm
 from sklearn.feature_selection import RFE
 from sklearn.linear_model import LogisticRegression
+import re
 
 
 logging.basicConfig(
@@ -21,6 +22,19 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levellevel)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
+
+class Config:
+    """Configuration for data analysis."""
+    def __init__(
+        self, 
+        include_patterns: Optional[List[str]] = None, 
+        exclude_patterns: Optional[List[str]] = None, 
+        force_values: Optional[Dict[str, any]] = None
+    ):
+        self.include_patterns = include_patterns or []
+        self.exclude_patterns = exclude_patterns or []
+        self.force_values = force_values or {}
+
 
 @dataclass
 class Tag:
@@ -64,16 +78,28 @@ class TradeJournal:
         logging.info(f"Adding trade with UID: {trade.uid}")
         self.trades.append(trade)
 
-    def to_dataframe(self) -> pd.DataFrame:
+    def to_dataframe(self, config: Optional[Config] = None) -> pd.DataFrame:
         data = []
         all_tags = set(tag.key for trade in self.trades for tag in trade.tags)
         for trade in self.trades:
             row = {'trade_uid': trade.uid}
             for tag in all_tags:
                 tag_value = next((t.value for t in trade.tags if t.key == tag), None)
-                row[tag] = tag_value
+                # Apply forced values from config
+                if config and tag in config.force_values:
+                    row[tag] = config.force_values[tag]
+                else:
+                    row[tag] = tag_value
             data.append(row)
         df = pd.DataFrame(data)
+        
+        # Apply inclusion/exclusion patterns
+        if config:
+            if config.include_patterns:
+                df = df.filter(regex='|'.join(config.include_patterns))
+            if config.exclude_patterns:
+                exclude_regex = '|'.join(config.exclude_patterns)
+                df = df.drop(columns=[col for col in df.columns if re.search(exclude_regex, col)], errors='ignore')
         
         # Detect and convert boolean columns
         for col in df.columns:
@@ -204,7 +230,7 @@ class TradeJournal:
         plt.savefig(os.path.join(output_dir, 'return_distribution.png'))
         plt.close()
 
-    def write_index_markdown(self, output_dir: str):
+    def write_index_markdown(self, output_dir: str, config: Optional[Config] = None):
         logging.info("Writing index markdown")
         index_path = os.path.join(output_dir, "index.md")
         stats = self.get_simple_statistics()
@@ -225,7 +251,7 @@ class TradeJournal:
             "### Tags Statistics",
             self.get_tags_statistics().to_markdown(index=False),
             "### Tags Distribution",
-            self.to_dataframe().describe().to_markdown(index=False),
+            self.to_dataframe(config).describe().to_markdown(index=False),
             "### Tags Relevance",
             tag_relevance_df.to_markdown(index=False),
             "### Best Single Tags",
@@ -240,14 +266,21 @@ class TradeJournal:
             "![Return Distribution](return_distribution.png)",
             "This plot shows the distribution of returns for the trades. The histogram provides a visual representation of the frequency of different return values.",
             "## DataFrame",
-            df.to_markdown(index=False)
+            df.to_markdown(index=False),
+            "## Specific Queries",
         ]
+
+        # Generate links to specific query markdown files
+        if config:
+            for idx, query in enumerate(config.include_patterns, start=1):
+                lines.append(f"- [Query {idx}: {query}](query_{idx}.md)")
+        
         for trade in self.trades:
             lines.append(f"- [Trade {trade.uid}](trade_{trade.uid}.md)")
         with open(index_path, 'w') as index_file:
             index_file.write("\n".join(lines))
 
-    def to_markdown(self, output_dir: str):
+    def to_markdown(self, output_dir: str, config: Optional[Config] = None):
         logging.info("Converting trades to markdown")
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
@@ -299,8 +332,18 @@ class TradeJournal:
             
             with open(md_path, 'w') as md_file:
                 md_file.write(md_content)
+        
+        if config:
+            for idx, pattern in enumerate(config.include_patterns, start=1):
+                md_path = os.path.join(output_dir, f"query_{idx}.md")
+                filtered_df = self.to_dataframe(config).filter(regex=pattern)
+                md_content = f"# Query {idx}: {pattern}\n\n"
+                md_content += filtered_df.to_markdown(index=False)
+                md_content += "\n\n[Back to Index](index.md)\n"
+                with open(md_path, 'w') as md_file:
+                    md_file.write(md_content)
             
-        self.write_index_markdown(output_dir)
+        self.write_index_markdown(output_dir, config)
         self.plot_statistics(output_dir)
 
     def find_best_tags(self, top_n: int = 5) -> pd.DataFrame:
@@ -451,3 +494,4 @@ class TradeJournal:
         
         results_df = pd.DataFrame(results)
         return results_df.sort_values(by='expectancy', ascending=False).head(top_n)
+

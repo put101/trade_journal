@@ -3,6 +3,7 @@ import markdown
 import os
 import random
 import logging
+import re  # Add regex module for pattern matching
 from src.tradecli import * 
 
 logging.basicConfig(level=logging.INFO)
@@ -46,7 +47,7 @@ class PA:
         df['has_type_2'] = df[[col for col in df.columns if col.startswith('type_2_')]].any(axis=1)
         df['has_type_3'] = df[[col for col in df.columns if col.startswith('type_3_')]].any(axis=1)
         df['has_time_frame'] = df[[col for col in df.columns if col in TF.ALL_TAGS]].any(axis=1)
-        
+        logging.info(f"Added PA tags to DataFrame. Columns: {df.columns}")
 
 class Confidence:
     TAG_CONFIDENCE = "confidence"
@@ -296,6 +297,13 @@ j = TradeJournal()
 j.get_all_categorical_tags = get_all_categorical_tags
 j.get_all_ignored_tags = get_all_ignored_tags
 
+# Define Configuration
+config = Config(
+    include_patterns=[r'^type_1_', r'^risk_reward_ratio$'],  # Example patterns to include
+    exclude_patterns=[r'^management_strategy$'],         # Example patterns to exclude
+    force_values={'side': 'long'}                        # Example of forcing 'side' to 'long'
+)
+
 logging.info("Creating initial trades")
 t = Trade(uid="1")
 t.add_tag(PA.type_1_(TF.m1), True)
@@ -380,10 +388,11 @@ for trade in j.trades:
             trade.add_tag(tag, False)
     
 logging.info("Converting journal trades to DataFrame")
-full_df = j.to_dataframe()
+full_df = j.to_dataframe(config)  # Pass the config object
 
 # ADDITIONAL FEATURES
 PA.add_tags_to_df(full_df)
+logging.info(f"DataFrame columns: {full_df.columns}")
 
 get_number_of_trades = lambda df: len(df)
 get_set_of_tags = lambda df: frozenset([tag for tag in df.columns if tag != "uid"])
