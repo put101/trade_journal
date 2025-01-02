@@ -57,12 +57,10 @@ class Confidence:
     @staticmethod
     def add_tags_to_trade(trade: Trade, confidence: int):
         assert confidence in Confidence.LEVELS
-        for level in Confidence.LEVELS:
-            trade.add_tag(f"confidence_{level}", confidence == level)
         trade.add_tag(Confidence.TAG_NUMERICAL_CONFIDENCE, confidence)  # Add numerical confidence
     
-    IGNORED_TAGS = [TAG_NUMERICAL_CONFIDENCE]
-    CATEGORICAL_TAGS = [f"confidence_{level}" for level in LEVELS]
+    IGNORED_TAGS = [TAG_NUMERICAL_CONFIDENCE] + [f"confidence_{level}" for level in LEVELS]
+    CATEGORICAL_TAGS = []
 
 class MultiTimeframeAnalysis:
     TAG_HTF_POI_LTF_CONFIRMATION = "htf_poi_ltf_confirmation"

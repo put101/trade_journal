@@ -349,7 +349,8 @@ class TradeJournal:
 
     def select_good_features(self, top_n: int = 10) -> List[str]:
         """
-        Select top_n features using Recursive Feature Elimination with Logistic Regression.
+        Select top_n features using Recursive Feature Elimination with Logistic Regression,
+        excluding outcome-related one-hot encoded columns.
         """
         logging.info(f"Selecting top {top_n} features using RFE")
         df = self.to_dataframe()
@@ -357,7 +358,7 @@ class TradeJournal:
             logging.warning("DataFrame is empty. No features to select.")
             return []
         
-            # Drop columns with all NaNs
+        # Drop columns with all NaNs
         df = df.dropna(axis=1, how='all')
         
         # Assume 'outcome' is the target variable
@@ -380,16 +381,33 @@ class TradeJournal:
         for col in X.select_dtypes(include=['datetime64']).columns:
             X[col] = X[col].astype('int64') // 10**9  # Convert to seconds since epoch
         
-        # Handle categorical variables by one-hot encoding
+        # Handle categorical variables by one-hot encoding, excluding 'confidence_*'
+        categorical_cols = [
+            col for col in X.select_dtypes(include=['category', 'object']).columns 
+            if not col.startswith('confidence_')
+        ]
+        X = pd.get_dummies(X, columns=categorical_cols, drop_first=True)
         
-        X = pd.get_dummies(X, drop_first=True)
+        # Use 'numerical_confidence' as a single numerical feature
+        if 'numerical_confidence' in X.columns:
+            # Ensure it's of numeric type
+            X['numerical_confidence'] = pd.to_numeric(X['numerical_confidence'], errors='coerce')
         
+        # Exclude outcome-related one-hot encoded columns
+        X = X.drop(columns=[col for col in X.columns if col.startswith('outcome_')], errors='ignore')
+        
+        # Remove any remaining 'confidence_*' related features just in case
+        confidence_cols = [col for col in X.columns if col.startswith('confidence_')]
+        if confidence_cols:
+            X = X.drop(columns=confidence_cols, errors='ignore')
+            logging.info(f"Dropped duplicate confidence columns: {confidence_cols}")
+
         model = LogisticRegression(max_iter=1000)
         rfe = RFE(model, n_features_to_select=top_n)
         try:
             rfe.fit(X, y)
             selected_features = X.columns[rfe.support_].tolist()
-            logging.info(f"Selected features: {selected_features}")
+            logging.info(f"Selected features # {len(selected_features)}: {selected_features}")
             return selected_features
         except Exception as e:
             logging.error(f"Error during feature selection: {e}")
