@@ -285,7 +285,7 @@ class TradeJournal:
         with open(index_path, 'w') as index_file:
             index_file.write("\n".join(lines))
 
-    def to_markdown(self, output_dir: str, config: Optional[Config] = None):
+    def to_markdown(self, output_dir: str, config: Optional[Config] = None, df: Optional[pd.DataFrame] = None):
         logging.info("Converting trades to markdown")
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
@@ -321,6 +321,9 @@ class TradeJournal:
        
         assets = get_files_for_trades(self.ASSETS_PATH) 
         logging.debug(f"Assets: {assets}")
+        
+        if df is None:
+            df = self.to_dataframe(config)
         
         for trade in self.trades:
             md_path = os.path.join(output_dir, f"trade_{trade.uid}.md")
@@ -506,6 +509,6 @@ class TradeJournal:
             
             results.extend([result for result in subset_results if result])
         
-        results_df = pd.DataFrame(results)
+        results_df = pd.DataFrame(results)        return results_df.sort_values(by='expectancy', ascending=False).head(top_n)            start_time = time.time()            logging.info(f"Starting parallel subset calculations for subset size {i} with Joblib")            subset_results = Parallel(n_jobs=-1)(                delayed(TradeJournal.calculate_subset)(subset, df) for subset in subset_combinations            )            end_time = time.time()            duration = end_time - start_time            logging.info(f"Parallel subset calculation for subset size {i} completed in {duration:.2f} seconds")                        results.extend([result for result in subset_results if result])                results_df = pd.DataFrame(results)
         return results_df.sort_values(by='expectancy', ascending=False).head(top_n)
 
