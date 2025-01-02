@@ -213,7 +213,7 @@ class TradeJournal:
         logging.info("Finding best single tags and subsets")
         best_tags = self.find_best_tags(top_n=5)
         logging.info("Finding best tag subsets")
-        best_subsets = self.find_best_tag_subsets_FULL_PARALLEL(top_n=5)
+        best_subsets = self.find_best_tag_subsets_FULL_PARALLEL(top_n=5, max_subset_size=6)
         
         ignored_tags = self.get_all_ignored_tags()
         
@@ -331,40 +331,6 @@ class TradeJournal:
         results_df = pd.DataFrame(results)
         return results_df.sort_values(by='expectancy', ascending=False).head(top_n)
 
-    def find_best_tag_subsets_FULL_SERIAL(self, top_n: int = 5, max_subset_size: int = 3) -> pd.DataFrame:
-        logging.info("Finding best tag subsets")
-        df = self.to_dataframe()
-        if df.empty:
-            return pd.DataFrame()
-        
-        ignored_tags = self.get_all_ignored_tags()
-        tags = [col for col in df.columns if col not in ['trade_uid', 'return', 'outcome'] and col not in ignored_tags]
-        results = []
-        
-        logging.info(f"Calculating tag subsets for tags: {tags}")
-        
-        for i in range(1, min(len(tags), max_subset_size) + 1):
-            logging.debug(f"subsets of N={len(tags)},k={i}: total subsets: {len(list(itertools.combinations(tags, i))):,}")
-            for subset in tqdm(itertools.combinations(tags, i)):
-                logging.debug(f"Calculating subset: {subset}")
-                subset_df = df.dropna(subset=subset)
-                if subset_df.empty:
-                    logging.debug(f"Subset {subset} is empty")
-                    continue
-                
-                winrate = subset_df[subset_df['outcome'] == 'win'].shape[0] / subset_df.shape[0] * 100
-                expectancy = subset_df['return'].mean()
-                
-                results.append({
-                    'tags': subset,
-                    'count': subset_df.shape[0],
-                    'winrate': winrate,
-                    'expectancy': expectancy
-                })
-        
-        results_df = pd.DataFrame(results)
-        return results_df.sort_values(by='expectancy', ascending=False).head(top_n)
-
     @staticmethod
     def calculate_subset(subset, df):
         subset_df = df.dropna(subset=subset)
@@ -381,21 +347,89 @@ class TradeJournal:
             'expectancy': expectancy
         }
 
-    def find_best_tag_subsets_FULL_PARALLEL(self, top_n: int = 5, max_subset_size: int = 3) -> pd.DataFrame:
+    def select_good_features(self, top_n: int = 10) -> List[str]:
+        """
+        Select top_n features using Recursive Feature Elimination with Logistic Regression.
+        """
+        logging.info(f"Selecting top {top_n} features using RFE")
+        df = self.to_dataframe()
+        if df.empty:
+            logging.warning("DataFrame is empty. No features to select.")
+            return []
+        
+            # Drop columns with all NaNs
+        df = df.dropna(axis=1, how='all')
+        
+        # Assume 'outcome' is the target variable
+        if 'outcome' not in df.columns:
+            logging.error("'outcome' column not found in DataFrame.")
+            return []
+        
+        # Drop rows with NaN in 'outcome'
+        df_old = df
+        df = df.dropna(subset=['outcome'])
+        logging.info(f"Dropped {df_old.shape[0] - df.shape[0]} rows with NaN in 'outcome' y variable")
+        
+        y = df['outcome'].apply(lambda x: 1 if x == 'win' else 0)  # Binary encoding
+        
+        cols = set(df.columns) - set(['trade_uid', 'outcome'] + self.get_all_ignored_tags())
+        logging.info(f"X features # {len(cols)}: {cols}")
+        X = df[list(cols)]
+
+        # Convert datetime columns to numerical values
+        for col in X.select_dtypes(include=['datetime64']).columns:
+            X[col] = X[col].astype('int64') // 10**9  # Convert to seconds since epoch
+        
+        # Handle categorical variables by one-hot encoding
+        
+        X = pd.get_dummies(X, drop_first=True)
+        
+        model = LogisticRegression(max_iter=1000)
+        rfe = RFE(model, n_features_to_select=top_n)
+        try:
+            rfe.fit(X, y)
+            selected_features = X.columns[rfe.support_].tolist()
+            logging.info(f"Selected features: {selected_features}")
+            return selected_features
+        except Exception as e:
+            logging.error(f"Error during feature selection: {e}")
+            return []
+
+    def find_best_tag_subsets_FULL_PARALLEL(self, top_n: int = 5, max_subset_size: int = 4) -> pd.DataFrame:
         logging.info("Finding best tag subsets")
         df = self.to_dataframe()
         if df.empty:
             return pd.DataFrame()
         
         ignored_tags = self.get_all_ignored_tags()
-        tags = [col for col in df.columns if col not in ['trade_uid', 'return', 'outcome'] and col not in ignored_tags]
+        # Select good features first
+        selected_features = self.select_good_features(top_n=10)
+        if not selected_features:
+            logging.error("No features selected. Aborting tag subset calculation.")
+            raise ValueError("No features selected.")
+        # Filter tags based on selected features
+        tags = [col for col in selected_features if col not in ['trade_uid', 'return', 'outcome'] and col not in ignored_tags]
         results = []
         
-        logging.info(f"Calculating tag subsets for tags: {tags}")
+        logging.info(f"Calculating tag subsets for selected tags: {tags}")
         
-        results = Parallel(n_jobs=-1)(delayed(TradeJournal.calculate_subset)(subset, df) for i in range(1, min(len(tags), max_subset_size) + 1) \
-            for subset in itertools.combinations(tags, i))
-        results = [result for result in results if result]
+        import time
+        for i in range(1, min(len(tags), max_subset_size) + 1):
+            num_combinations = len(list(itertools.combinations(tags, i)))
+            logging.info(f"Number of combinations for subset size {i}: {num_combinations}")
+            
+            subset_combinations = list(itertools.combinations(tags, i))
+            
+            start_time = time.time()
+            logging.info(f"Starting parallel subset calculations for subset size {i} with Joblib")
+            subset_results = Parallel(n_jobs=-1)(
+                delayed(TradeJournal.calculate_subset)(subset, df) for subset in subset_combinations
+            )
+            end_time = time.time()
+            duration = end_time - start_time
+            logging.info(f"Parallel subset calculation for subset size {i} completed in {duration:.2f} seconds")
+            
+            results.extend([result for result in subset_results if result])
         
         results_df = pd.DataFrame(results)
         return results_df.sort_values(by='expectancy', ascending=False).head(top_n)
