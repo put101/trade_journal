@@ -7,7 +7,6 @@ import re  # Add regex module for pattern matching
 from src.tradecli import * 
 
 logging.basicConfig(level=logging.INFO)
-random.seed(43)
 
 class TF:    
     m1="m1"

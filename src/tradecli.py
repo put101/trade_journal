@@ -241,6 +241,9 @@ class TradeJournal:
         logging.info("Finding best tag subsets")
         best_subsets = self.find_best_tag_subsets_FULL_PARALLEL(top_n=5, max_subset_size=6)
         
+        # Get selected features from RFE
+        selected_features = self.select_good_features()
+
         ignored_tags = self.get_all_ignored_tags()
         
         lines = [
@@ -258,6 +261,8 @@ class TradeJournal:
             best_tags.to_markdown(index=False),
             "### Best Tag Subsets",
             best_subsets.to_markdown(index=False),
+            "### Selected Features using RFE",
+            ", ".join(selected_features),
             "## Ignored Tags",
             ", ".join(ignored_tags),
             "## Trades",
@@ -324,7 +329,9 @@ class TradeJournal:
             md_content += f"**Tags:** {', '.join([f'{tag.key}:{tag.value}' for tag in trade.tags])}\n\n"
     	    
             md_content += f"## Assets\n\n"
-            
+            if trade.uid in assets:
+                for asset in assets[trade.uid]:
+                    md_content += f"![Asset]({asset})\n\n" 
 
             md_content += f"## Trade Plot Explanation\n\n"
 
@@ -451,6 +458,13 @@ class TradeJournal:
             rfe.fit(X, y)
             selected_features = X.columns[rfe.support_].tolist()
             logging.info(f"Selected features # {len(selected_features)}: {selected_features}")
+            
+            # Log feature rankings
+            feature_ranking = sorted(zip(X.columns, rfe.ranking_), key=lambda x: x[1])
+            logging.info("RFE Feature Rankings:")
+            for feature, rank in feature_ranking:
+                logging.info(f"{feature}: Rank {rank}")
+            
             return selected_features
         except Exception as e:
             logging.error(f"Error during feature selection: {e}")
