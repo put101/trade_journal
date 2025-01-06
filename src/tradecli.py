@@ -23,12 +23,14 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
+
 class Config:
     """Configuration for data analysis."""
+
     def __init__(
-        self, 
-        include_patterns: Optional[List[str]] = None, 
-        exclude_patterns: Optional[List[str]] = None, 
+        self,
+        include_patterns: Optional[List[str]] = None,
+        exclude_patterns: Optional[List[str]] = None,
         force_values: Optional[Dict[str, any]] = None
     ):
         self.include_patterns = include_patterns or []
@@ -42,6 +44,7 @@ class Tag:
     key: str
     value: Union[bool, float]
 
+
 @dataclass
 class Trade:
     uid: str
@@ -49,10 +52,10 @@ class Trade:
 
     def get_tags_dict(self) -> Dict[str, any]:
         return {tag.key: tag.value for tag in self.tags}
-    
+
     def add_tag(self, key: str, value: Union[bool, float]):
         self.tags.append(Tag(key=key, value=value, timestamp=None))
-        
+
     def has_tag(self, key: str) -> bool:
         return any(tag.key == key for tag in self.tags)
 
@@ -64,15 +67,18 @@ class Trade:
 class TradeJournal:
     trades: List[Trade] = field(default_factory=list)
     # path to the assets folder inside the project
-    ASSETS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets')
+    ASSETS_PATH = os.path.join(os.path.dirname(
+        os.path.abspath(__file__)), 'assets')
 
     @override
     def get_all_categorical_tags(self) -> List[str]:
-        raise NotImplementedError("This method `get_all_categorical_tags`should be implemented in a subclass.")
-    
+        raise NotImplementedError(
+            "This method `get_all_categorical_tags`should be implemented in a subclass.")
+
     @override
     def get_all_ignored_tags(self) -> List[str]:
-        raise NotImplementedError("This method should be implemented in a subclass.")
+        raise NotImplementedError(
+            "This method should be implemented in a subclass.")
 
     def add_trade(self, trade: Trade):
         logging.info(f"Adding trade with UID: {trade.uid}")
@@ -84,7 +90,8 @@ class TradeJournal:
         for trade in self.trades:
             row = {'trade_uid': trade.uid}
             for tag in all_tags:
-                tag_value = next((t.value for t in trade.tags if t.key == tag), None)
+                tag_value = next(
+                    (t.value for t in trade.tags if t.key == tag), None)
                 # Apply forced values from config
                 if config and tag in config.force_values:
                     row[tag] = config.force_values[tag]
@@ -92,31 +99,32 @@ class TradeJournal:
                     row[tag] = tag_value
             data.append(row)
         df = pd.DataFrame(data)
-        
+
         # Apply inclusion/exclusion patterns
         if config:
             if config.include_patterns:
                 df = df.filter(regex='|'.join(config.include_patterns))
             if config.exclude_patterns:
                 exclude_regex = '|'.join(config.exclude_patterns)
-                df = df.drop(columns=[col for col in df.columns if re.search(exclude_regex, col)], errors='ignore')
-        
+                df = df.drop(columns=[col for col in df.columns if re.search(
+                    exclude_regex, col)], errors='ignore')
+
         # Detect and convert boolean columns
         for col in df.columns:
             unique_values = df[col].dropna().unique()
             if set(unique_values).issubset({True, False}):
                 logging.debug(f"Converting column {col} to boolean")
                 df[col] = df[col].astype(bool)
-        
+
         # Convert categorical columns
         categorical_tags = self.get_all_categorical_tags()
         for col in categorical_tags:
             if col in df.columns:
                 df[col] = df[col].astype('category')
-        
+
         # Pivot categorical columns
         df = self.pivot_categorical_columns(df, categorical_tags)
-        
+
         return df
 
     def pivot_categorical_columns(self, df: pd.DataFrame, categorical_columns: List[str]) -> pd.DataFrame:
@@ -132,26 +140,27 @@ class TradeJournal:
         if df.empty:
             return "No trades found."
         trade_count = df['trade_uid'].nunique()
-        
+
         n_long = df[df['side'] == 'long'].shape[0]
         n_short = df[df['side'] == 'short'].shape[0]
         n_side_nans = df['side'].isnull().sum()
-        
+
         winrate = df[df['outcome'] == 'win'].shape[0] / trade_count * 100
         n_outcome_nans = df['outcome'].isnull().sum()
-        
+
         total_rows = df.shape[0]
         nans = df.isnull().sum().sum()
-        
+
         # Calculate trade expectancy
         trade_expectancy = df['return'].mean()
         n_return_nans = df['return'].isnull().sum()
-        
+
         return (f"Trade count: {trade_count}\n\n"
                 f"Long trades: {n_long} (NaNs: {n_side_nans})\n\n"
                 f"Short trades: {n_short} (NaNs: {n_side_nans})\n\n"
                 f"Winrate: {winrate:.2f}% (NaNs: {n_outcome_nans})\n\n"
-                f"Trade expectancy: {trade_expectancy:.2f} (NaNs: {n_return_nans})\n\n"
+                f"Trade expectancy: {
+                    trade_expectancy:.2f} (NaNs: {n_return_nans})\n\n"
                 f"Total rows: {total_rows}\n\n"
                 f"NaNs or skipped values: {nans}")
 
@@ -178,15 +187,17 @@ class TradeJournal:
         df = self.to_dataframe()
         if df.empty:
             return pd.DataFrame()
-        
-        tags = [col for col in df.columns if col not in ['trade_uid', 'return', 'outcome']]
+
+        tags = [col for col in df.columns if col not in [
+            'trade_uid', 'return', 'outcome']]
         analysis_data = []
-        
+
         for tag in tags:
             tag_df = df.dropna(subset=[tag])
             if tag_df.empty:
                 continue
-            winrate = tag_df[tag_df['outcome'] == 'win'].shape[0] / tag_df.shape[0] * 100
+            winrate = tag_df[tag_df['outcome'] ==
+                             'win'].shape[0] / tag_df.shape[0] * 100
             expectancy = tag_df['return'].mean()
             skipped = df.shape[0] - tag_df.shape[0]
             nans = df[tag].isnull().sum()
@@ -198,7 +209,7 @@ class TradeJournal:
                 'skipped': skipped,
                 'nans': nans
             })
-        
+
         return pd.DataFrame(analysis_data)
 
     def plot_statistics(self, output_dir: str):
@@ -206,17 +217,18 @@ class TradeJournal:
         df = self.to_dataframe()
         if df.empty:
             return
-        
+
         plt.style.use('dark_background')
         sns.set_palette("bright")
-        
+
         total_rows = df.shape[0]
         skipped_rows_outcome = df['outcome'].isnull().sum()
         skipped_rows_return = df['return'].isnull().sum()
-        
+
         plt.figure(figsize=(10, 6))
         sns.countplot(x='outcome', data=df)
-        plt.title(f'Trade Outcomes (Total rows: {total_rows}, Skipped rows: {skipped_rows_outcome})')
+        plt.title(f'Trade Outcomes (Total rows: {
+                  total_rows}, Skipped rows: {skipped_rows_outcome})')
         plt.xlabel('Outcome')
         plt.ylabel('Count')
         plt.savefig(os.path.join(output_dir, 'trade_outcomes.png'))
@@ -224,7 +236,8 @@ class TradeJournal:
 
         plt.figure(figsize=(10, 6))
         sns.histplot(df['return'].dropna(), kde=True)
-        plt.title(f'Return Distribution (Total rows: {total_rows}, Skipped rows: {skipped_rows_return})')
+        plt.title(f'Return Distribution (Total rows: {
+                  total_rows}, Skipped rows: {skipped_rows_return})')
         plt.xlabel('Return')
         plt.ylabel('Frequency')
         plt.savefig(os.path.join(output_dir, 'return_distribution.png'))
@@ -239,13 +252,14 @@ class TradeJournal:
         logging.info("Finding best single tags and subsets")
         best_tags = self.find_best_tags(top_n=5)
         logging.info("Finding best tag subsets")
-        best_subsets = self.find_best_tag_subsets_FULL_PARALLEL(top_n=5, max_subset_size=6)
-        
+        best_subsets = self.find_best_tag_subsets_FULL_PARALLEL(
+            top_n=5, max_subset_size=6)
+
         # Get selected features from RFE
         selected_features = self.select_good_features()
 
         ignored_tags = self.get_all_ignored_tags()
-        
+
         lines = [
             "# Trade Journal Index",
             "## Summary Statistics",
@@ -279,7 +293,7 @@ class TradeJournal:
         if config:
             for idx, query in enumerate(config.include_patterns, start=1):
                 lines.append(f"- [Query {idx}: {query}](query_{idx}.md)")
-        
+
         for trade in self.trades:
             lines.append(f"- [Trade {trade.uid}](trade_{trade.uid}.md)")
         with open(index_path, 'w') as index_file:
@@ -289,7 +303,7 @@ class TradeJournal:
         logging.info("Converting trades to markdown")
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
-        
+
         def get_files_for_trades(p: pathlib.Path) -> Dict[str, List[str]]:
             """Files are structured arbitrarly by the user. 
             Assets need to be below the ASSETS_PATH folder in any strucutre and files are attributed in named-sorted order
@@ -297,7 +311,7 @@ class TradeJournal:
             """
             import glob
             files = {}
-            
+
             for trade in self.trades:
                 trade_id = trade.uid
                 files[trade_id] = []
@@ -306,53 +320,45 @@ class TradeJournal:
                         files[trade_id].append(asset)
                 # sort the files by name
                 files[trade_id].sort()
-            
+
             logging.info("Files for trades found")
-            logging.info(f"Files Found #: {len(files)}, Total Trades #: {len(self.trades)}" \
-                + f"max files for trade: {max([len(files[trade.uid]) for trade in self.trades])}" \
-                + f"min files for trade: {min([len(files[trade.uid]) for trade in self.trades])}" \
-                + f"avg files for trade: {sum([len(files[trade.uid]) for trade in self.trades]) / len(self.trades)}")
+            logging.info(f"Files Found #: {len(files)}, Total Trades #: {len(self.trades)}"
+                         + f"max files for trade: {max([len(files[trade.uid]) for trade in self.trades])}"
+                         + f"min files for trade: {min([len(files[trade.uid]) for trade in self.trades])}"
+                         + f"avg files for trade: {sum([len(files[trade.uid]) for trade in self.trades]) / len(self.trades)}")
             # do similar descriptive statistics using pandas
             # pd.DataFrame([len(files[trade.uid]) for trade in self.trades]).describe()
-            file_stats = pd.DataFrame([len(files[trade.uid]) for trade in self.trades])
+            file_stats = pd.DataFrame([len(files[trade.uid])
+                                      for trade in self.trades])
             logging.info(f"Descriptive Statistics: {file_stats.describe()}")
 
             return files
-       
-        assets = get_files_for_trades(self.ASSETS_PATH) 
+
+        assets = get_files_for_trades(self.ASSETS_PATH)
         logging.debug(f"Assets: {assets}")
-        
+
         if df is None:
             df = self.to_dataframe(config)
-        
+
         for trade in self.trades:
             md_path = os.path.join(output_dir, f"trade_{trade.uid}.md")
             md_content = f"# Trade Summary\n\n"
             md_content += f"**Trade UID:** {trade.uid} \n\n"
-            md_content += f"**Tags:** {', '.join([f'{tag.key}:{tag.value}' for tag in trade.tags])}\n\n"
-    	    
+            md_content += f"**Tags:** {
+                ', '.join([f'{tag.key}:{tag.value}' for tag in trade.tags])}\n\n"
+
             md_content += f"## Assets\n\n"
             if trade.uid in assets:
                 for asset in assets[trade.uid]:
-                    md_content += f"![Asset]({asset})\n\n" 
+                    md_content += f"![Asset]({asset})\n\n"
 
             md_content += f"## Trade Plot Explanation\n\n"
 
             md_content += "\n[Back to Index](index.md)\n"
-            
+
             with open(md_path, 'w') as md_file:
                 md_file.write(md_content)
-        
-        if config:
-            for idx, pattern in enumerate(config.include_patterns, start=1):
-                md_path = os.path.join(output_dir, f"query_{idx}.md")
-                filtered_df = self.to_dataframe(config).filter(regex=pattern)
-                md_content = f"# Query {idx}: {pattern}\n\n"
-                md_content += filtered_df.to_markdown(index=False)
-                md_content += "\n\n[Back to Index](index.md)\n"
-                with open(md_path, 'w') as md_file:
-                    md_file.write(md_content)
-            
+
         self.write_index_markdown(output_dir, config)
         self.plot_statistics(output_dir)
 
@@ -361,26 +367,28 @@ class TradeJournal:
         df = self.to_dataframe()
         if df.empty:
             return pd.DataFrame()
-        
+
         ignored_tags = self.get_all_ignored_tags()
-        tags = [col for col in df.columns if col not in ['trade_uid', 'return', 'outcome'] and col not in ignored_tags]
+        tags = [col for col in df.columns if col not in [
+            'trade_uid', 'return', 'outcome'] and col not in ignored_tags]
         results = []
-        
+
         for tag in tags:
             tag_df = df.dropna(subset=[tag])
             if tag_df.empty:
                 continue
-            
-            winrate = tag_df[tag_df['outcome'] == 'win'].shape[0] / tag_df.shape[0] * 100
+
+            winrate = tag_df[tag_df['outcome'] ==
+                             'win'].shape[0] / tag_df.shape[0] * 100
             expectancy = tag_df['return'].mean()
-            
+
             results.append({
                 'tag': tag,
                 'count': tag_df.shape[0],
                 'winrate': winrate,
                 'expectancy': expectancy
             })
-        
+
         results_df = pd.DataFrame(results)
         return results_df.sort_values(by='expectancy', ascending=False).head(top_n)
 
@@ -389,10 +397,11 @@ class TradeJournal:
         subset_df = df.dropna(subset=subset)
         if subset_df.empty:
             return None
-        
-        winrate = subset_df[subset_df['outcome'] == 'win'].shape[0] / subset_df.shape[0] * 100
+
+        winrate = subset_df[subset_df['outcome'] ==
+                            'win'].shape[0] / subset_df.shape[0] * 100
         expectancy = subset_df['return'].mean()
-        
+
         return {
             'tags': subset,
             'count': subset_df.shape[0],
@@ -410,64 +419,74 @@ class TradeJournal:
         if df.empty:
             logging.warning("DataFrame is empty. No features to select.")
             return []
-        
+
         # Drop columns with all NaNs
         df = df.dropna(axis=1, how='all')
-        
+
         # Assume 'outcome' is the target variable
         if 'outcome' not in df.columns:
             logging.error("'outcome' column not found in DataFrame.")
             return []
-        
+
         # Drop rows with NaN in 'outcome'
         df_old = df
         df = df.dropna(subset=['outcome'])
-        logging.info(f"Dropped {df_old.shape[0] - df.shape[0]} rows with NaN in 'outcome' y variable")
-        
-        y = df['outcome'].apply(lambda x: 1 if x == 'win' else 0)  # Binary encoding
-        
-        cols = set(df.columns) - set(['trade_uid', 'outcome'] + self.get_all_ignored_tags())
+        logging.info(f"Dropped {
+                     df_old.shape[0] - df.shape[0]} rows with NaN in 'outcome' y variable")
+
+        y = df['outcome'].apply(
+            lambda x: 1 if x == 'win' else 0)  # Binary encoding
+
+        cols = set(df.columns) - \
+            set(['trade_uid', 'outcome'] + self.get_all_ignored_tags())
         logging.info(f"X features # {len(cols)}: {cols}")
         X = df[list(cols)]
 
         # Convert datetime columns to numerical values
         for col in X.select_dtypes(include=['datetime64']).columns:
-            X[col] = X[col].astype('int64') // 10**9  # Convert to seconds since epoch
-        
+            # Convert to seconds since epoch
+            X[col] = X[col].astype('int64') // 10**9
+
         # Handle categorical variables by one-hot encoding, excluding 'confidence_*'
         categorical_cols = [
-            col for col in X.select_dtypes(include=['category', 'object']).columns 
+            col for col in X.select_dtypes(include=['category', 'object']).columns
             if not col.startswith('confidence_')
         ]
         X = pd.get_dummies(X, columns=categorical_cols, drop_first=True)
-        
+
         # Use 'numerical_confidence' as a single numerical feature
         if 'numerical_confidence' in X.columns:
             # Ensure it's of numeric type
-            X['numerical_confidence'] = pd.to_numeric(X['numerical_confidence'], errors='coerce')
-        
+            X['numerical_confidence'] = pd.to_numeric(
+                X['numerical_confidence'], errors='coerce')
+
         # Exclude outcome-related one-hot encoded columns
-        X = X.drop(columns=[col for col in X.columns if col.startswith('outcome_')], errors='ignore')
-        
+        X = X.drop(columns=[col for col in X.columns if col.startswith(
+            'outcome_')], errors='ignore')
+
         # Remove any remaining 'confidence_*' related features just in case
-        confidence_cols = [col for col in X.columns if col.startswith('confidence_')]
+        confidence_cols = [
+            col for col in X.columns if col.startswith('confidence_')]
         if confidence_cols:
             X = X.drop(columns=confidence_cols, errors='ignore')
-            logging.info(f"Dropped duplicate confidence columns: {confidence_cols}")
+            logging.info(f"Dropped duplicate confidence columns: {
+                         confidence_cols}")
 
         model = LogisticRegression(max_iter=1000)
         rfe = RFE(model, n_features_to_select=top_n)
         try:
             rfe.fit(X, y)
             selected_features = X.columns[rfe.support_].tolist()
-            logging.info(f"Selected features # {len(selected_features)}: {selected_features}")
-            
+            logging.info(f"Selected features # {
+                         len(selected_features)}: {selected_features}")
+
             # Log feature rankings
-            feature_ranking = sorted(zip(X.columns, rfe.ranking_), key=lambda x: x[1])
+            feature_ranking = sorted(
+                zip(X.columns, rfe.ranking_), key=lambda x: x[1])
             logging.info("RFE Feature Rankings:")
             for feature, rank in feature_ranking:
                 logging.info(f"{feature}: Rank {rank}")
-            
+
             return selected_features
         except Exception as e:
             logging.error(f"Error during feature selection: {e}")
@@ -478,37 +497,148 @@ class TradeJournal:
         df = self.to_dataframe()
         if df.empty:
             return pd.DataFrame()
-        
+
         ignored_tags = self.get_all_ignored_tags()
         # Select good features first
         selected_features = self.select_good_features(top_n=10)
         if not selected_features:
-            logging.error("No features selected. Aborting tag subset calculation.")
+            logging.error(
+                "No features selected. Aborting tag subset calculation.")
             raise ValueError("No features selected.")
         # Filter tags based on selected features
-        tags = [col for col in selected_features if col not in ['trade_uid', 'return', 'outcome'] and col not in ignored_tags]
+        tags = [col for col in selected_features if col not in [
+            'trade_uid', 'return', 'outcome'] and col not in ignored_tags]
         results = []
-        
+
         logging.info(f"Calculating tag subsets for selected tags: {tags}")
-        
+
         import time
         for i in range(1, min(len(tags), max_subset_size) + 1):
             num_combinations = len(list(itertools.combinations(tags, i)))
-            logging.info(f"Number of combinations for subset size {i}: {num_combinations}")
-            
+            logging.info(f"Number of combinations for subset size {
+                         i}: {num_combinations}")
+
             subset_combinations = list(itertools.combinations(tags, i))
-            
+
             start_time = time.time()
-            logging.info(f"Starting parallel subset calculations for subset size {i} with Joblib")
+            logging.info(f"Starting parallel subset calculations for subset size {
+                         i} with Joblib")
             subset_results = Parallel(n_jobs=-1)(
                 delayed(TradeJournal.calculate_subset)(subset, df) for subset in subset_combinations
             )
             end_time = time.time()
             duration = end_time - start_time
-            logging.info(f"Parallel subset calculation for subset size {i} completed in {duration:.2f} seconds")
-            
+            logging.info(f"Parallel subset calculation for subset size {
+                         i} completed in {duration:.2f} seconds")
+
             results.extend([result for result in subset_results if result])
-        
-        results_df = pd.DataFrame(results)        return results_df.sort_values(by='expectancy', ascending=False).head(top_n)            start_time = time.time()            logging.info(f"Starting parallel subset calculations for subset size {i} with Joblib")            subset_results = Parallel(n_jobs=-1)(                delayed(TradeJournal.calculate_subset)(subset, df) for subset in subset_combinations            )            end_time = time.time()            duration = end_time - start_time            logging.info(f"Parallel subset calculation for subset size {i} completed in {duration:.2f} seconds")                        results.extend([result for result in subset_results if result])                results_df = pd.DataFrame(results)
+
+        results_df = pd.DataFrame(results)
+
         return results_df.sort_values(by='expectancy', ascending=False).head(top_n)
 
+
+
+class ReportOptunaConfig:
+    """Configuration for Optuna hyperparameter optimization."""
+
+    def __init__(
+        self,
+        n_trials: int = 100,
+        n_jobs: int = 1,
+        timeout: Optional[int] = None,
+        study_name: str = 'default',
+        direction: str = 'maximize'
+    ):
+        self.n_trials = n_trials
+        self.n_jobs = n_jobs
+        self.timeout = timeout
+        self.study_name = study_name
+        self.direction = direction
+    
+def report_best_performing_tags_value(df, y_col:str, feat_cols:Optional[list]=None, score_mode='mean', method='brute_force', config:any=None):
+    """_summary_
+
+    Args:
+        df (_type_): _description_
+        feat_cols (_type_): _description_
+        y_col (_type_): _description_
+        
+    Prints the best subset of tags and combinations for the given dataframe features and target column output.
+    It should find the highest scoring tags and their values for the given target column.
+    It does not use a model but rather try to find the best combination of tags 
+    """
+
+    best_subset = None
+    best_score = -1
+    best_combination = None
+
+    if feat_cols is None:
+        feat_cols = df.columns.tolist()
+        feat_cols.remove(y_col)
+
+    if method == 'brute_force':
+        for i in range(1, len(feat_cols) + 1):
+            for subset in itertools.combinations(feat_cols, i):
+                for combination in itertools.product(*[df[col].unique() for col in subset]):
+                    mask = df[list(subset)].apply(lambda x: x == combination, axis=1).all(axis=1)
+                    if score_mode == 'mean':
+                        score = df[mask][y_col].mean()
+                    
+                    if score > best_score:
+                        best_score = score
+                        best_subset = subset
+                        best_combination = combination
+                        print(f"Best subset: {best_subset}")
+                        print(f"Best combination: {best_combination}")
+                        print(f"Best score: {best_score}")
+        
+        # end i
+        
+        print(f"Best subset: {best_subset}")
+        print(f"Best combination: {best_combination}")
+        print(f"Best score: {best_score}")
+    
+    if method == 'optuna':
+        assert config is not None, "Optuna configuration is required for optuna method"
+        assert isinstance(config, ReportOptunaConfig), f"Optuna config {type(config)} wrong type"
+        import optuna
+        from optuna.samplers import TPESampler
+        from optuna.trial import TrialState
+        from optuna.study import StudyDirection
+        from optuna.study import create_study
+        
+        """Optimize which tags and their values are best for the given target column
+        Not using all tags is likely the best
+        """
+        
+
+
+        def objective(trial: optuna.Trial):
+            
+            subset_size_k = trial.suggest_int('subset_k', 0, len(feat_cols))
+            all_tag_selections = itertools.combinations(feat_cols, subset_size_k)
+            
+            selected_tags = trial.suggest_categorical('selected_tags', list(all_tag_selections))
+            combination_values = {}
+            for tag in selected_tags:
+                unique_values = df[tag].unique().tolist()
+                combination_values[tag] = trial.suggest_categorical(f'value_{tag}', unique_values)
+            
+            mask = pd.Series([True] * len(df))
+            for tag, value in combination_values.items():
+                mask &= df[tag] == value
+            
+            if score_mode == 'mean':
+                score = df.loc[mask, y_col].mean()
+            else:
+                raise NotImplemented('score mode not supported')
+            
+            return score
+        
+        study = create_study(direction=StudyDirection.MAXIMIZE if config.direction == 'maximize' else StudyDirection.MINIMIZE, study_name=config.study_name, sampler=TPESampler())
+        study.optimize(objective, n_trials=config.n_trials, n_jobs=config.n_jobs, timeout=config.timeout)
+        best_params = study.best_params
+        best_score = study.best_value
+        print(f"Best parameters: {best_params}")
+        print(f"Best score: {best_score}")

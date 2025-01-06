@@ -297,11 +297,6 @@ j.get_all_categorical_tags = get_all_categorical_tags
 j.get_all_ignored_tags = get_all_ignored_tags
 
 # Define Configuration
-config = Config(
-    include_patterns=[r'^type_1_', r'^risk_reward_ratio$'],  # Example patterns to include
-    exclude_patterns=[r'^management_strategy$'],         # Example patterns to exclude
-    force_values={'side': 'long'}                        # Example of forcing 'side' to 'long'
-)
 
 logging.info("Creating initial trades")
 t = Trade(uid="1")
@@ -359,6 +354,7 @@ for i in range(5, 15):
     t.add_tag(random.choice([PA.type_2_(tf) for tf in timeframes]), True)
     j.add_trade(t)
     entry_price = round(1.1000 + random.uniform(0.01, 0.05), 4)
+    # long only
     sl_price = round(entry_price - random.uniform(0.005, 0.01), 4)
     tp_price = round(entry_price + random.uniform(0.01, 0.05), 4)
     close_price = round(entry_price + random.uniform(-0.02, 0.02), 4) if random.random() > 0.5 else None
@@ -387,7 +383,7 @@ for trade in j.trades:
             trade.add_tag(tag, False)
     
 logging.info("Converting journal trades to DataFrame")
-full_df = j.to_dataframe(config)  # Pass the config object
+full_df = j.to_dataframe(config=None)  # Pass the config object
 
 # ADDITIONAL FEATURES
 PA.add_tags_to_df(full_df)
