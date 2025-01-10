@@ -15,14 +15,14 @@ from tqdm import tqdm
 from sklearn.feature_selection import RFE
 from sklearn.linear_model import LogisticRegression
 import re
-
+import json
+import numpy as np
 
 logging.basicConfig(
     level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levellevel)s - %(message)s',
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
-
 
 class Config:
     """Configuration for data analysis."""
@@ -67,9 +67,21 @@ class Trade:
 class TradeJournal:
     trades: List[Trade] = field(default_factory=list)
     # path to the assets folder inside the project
-    ASSETS_PATH = os.path.join(os.path.dirname(
-        os.path.abspath(__file__)), 'assets')
-
+    ENV_JOURNAL_ROOT = os.environ.get('JOURNAL_ROOT')
+    CWD_JOURNAL_ROOT = os.getcwd()
+    if ENV_JOURNAL_ROOT is None:
+        raise ValueError("JOURNAL_ROOT environment variable not set.")
+    
+    JOURNAL_ROOT = pathlib.Path(ENV_JOURNAL_ROOT)
+    
+    ASSETS_PATH = JOURNAL_ROOT / 'assets'
+    EXPORT_PATH = JOURNAL_ROOT / 'export'
+    logging.info(f"Journal root: {JOURNAL_ROOT}")
+    logging.info(f"CMD Journal root: {CWD_JOURNAL_ROOT}")
+    logging.info(f"Assets root: {ASSETS_PATH}")
+    logging.info(f"Export root: {EXPORT_PATH}")
+    
+    
     @override
     def get_all_categorical_tags(self) -> List[str]:
         raise NotImplementedError(
@@ -381,6 +393,9 @@ class TradeJournal:
             winrate = tag_df[tag_df['outcome'] ==
                              'win'].shape[0] / tag_df.shape[0] * 100
             expectancy = tag_df['return'].mean()
+            if pd.isna(expectancy):
+                logging.warning(f"Expectancy is NaN for tag {tag}")
+                continue
 
             results.append({
                 'tag': tag,
@@ -454,11 +469,9 @@ class TradeJournal:
         ]
         X = pd.get_dummies(X, columns=categorical_cols, drop_first=True)
 
-        # Use 'numerical_confidence' as a single numerical feature
-        if 'numerical_confidence' in X.columns:
-            # Ensure it's of numeric type
-            X['numerical_confidence'] = pd.to_numeric(
-                X['numerical_confidence'], errors='coerce')
+        # Fill NaN values with a default or appropriate value
+        X = X.fillna(0)
+        logging.debug("Filled NaN values in feature matrix with 0")
 
         # Exclude outcome-related one-hot encoded columns
         X = X.drop(columns=[col for col in X.columns if col.startswith(
@@ -531,11 +544,52 @@ class TradeJournal:
             logging.info(f"Parallel subset calculation for subset size {
                          i} completed in {duration:.2f} seconds")
 
-            results.extend([result for result in subset_results if result])
+            results.extend([result for result in subset_results if result and not pd.isna(result['expectancy'])])
 
         results_df = pd.DataFrame(results)
 
         return results_df.sort_values(by='expectancy', ascending=False).head(top_n)
+
+    def export_dataframe_for_r(self, df: pd.DataFrame, export_dir: str):
+        """
+        Export the DataFrame to an Excel file and save the list of relevant columns to a JSON file for R analysis.
+        """
+        os.makedirs(export_dir, exist_ok=True)
+        excel_path = os.path.join(export_dir, 'trade_data.xlsx')
+        cols_path = os.path.join(export_dir, 'relevant_columns.json')
+        
+        # Save DataFrame to Excel
+        df.to_excel(excel_path, index=False)
+        logging.info(f"Exported DataFrame to {excel_path}")
+        
+        # Define relevant columns (example: excluding 'trade_uid')
+        relevant_columns = [col for col in df.columns if col != 'trade_uid']
+        
+        # Save relevant columns to JSON
+        with open(cols_path, 'w') as f:
+            json.dump(relevant_columns, f, indent=4)
+        logging.info(f"Exported relevant columns to {cols_path}")
+
+        # Save DataFrame to CSV
+        csv_path = os.path.join(export_dir, 'trade_data.csv')
+        df.to_csv(csv_path, index=False)
+        logging.info(f"Exported DataFrame to {csv_path}")
+        
+        # Save DataFrame to Feather
+        feather_path = os.path.join(export_dir, 'trade_data.feather')
+        df.to_feather(feather_path)
+        logging.info(f"Exported DataFrame to {feather_path}")
+        
+        # Save DataFrame to Parquet
+        parquet_path = os.path.join(export_dir, 'trade_data.parquet')
+        df.to_parquet(parquet_path)
+        logging.info(f"Exported DataFrame to {parquet_path}")
+        
+        # Save DataFrame to json
+        json_path = os.path.join(export_dir, 'trade_data.json')
+        df.to_json(json_path)
+        logging.info(f"Exported DataFrame to {json_path}")
+        
 
 
 
@@ -556,6 +610,10 @@ class ReportOptunaConfig:
         self.study_name = study_name
         self.direction = direction
     
+from itertools import combinations, product
+
+
+
 def report_best_performing_tags_value(df, y_col:str, feat_cols:Optional[list]=None, score_mode='mean', method='brute_force', config:any=None):
     """_summary_
 
@@ -576,6 +634,9 @@ def report_best_performing_tags_value(df, y_col:str, feat_cols:Optional[list]=No
     if feat_cols is None:
         feat_cols = df.columns.tolist()
         feat_cols.remove(y_col)
+        
+    unique_values_dict = {col: df[col].unique().tolist() for col in feat_cols}
+    logging.info(f"Unique values for each feature:\n{unique_values_dict}")
 
     if method == 'brute_force':
         for i in range(1, len(feat_cols) + 1):
@@ -583,7 +644,14 @@ def report_best_performing_tags_value(df, y_col:str, feat_cols:Optional[list]=No
                 for combination in itertools.product(*[df[col].unique() for col in subset]):
                     mask = df[list(subset)].apply(lambda x: x == combination, axis=1).all(axis=1)
                     if score_mode == 'mean':
-                        score = df[mask][y_col].mean()
+                        try:
+                            score = df[mask][y_col].mean()
+                            if pd.isna(score):
+                                logging.warning(f"Score is NaN for subset {subset} with combination {combination}")
+                                continue
+                        except Exception as e:
+                            logging.error(f"Error calculating mean for {y_col}: {e}")
+                            score = None
                     
                     if score > best_score:
                         best_score = score
@@ -612,33 +680,52 @@ def report_best_performing_tags_value(df, y_col:str, feat_cols:Optional[list]=No
         Not using all tags is likely the best
         """
         
-
-
-        def objective(trial: optuna.Trial):
-            
-            subset_size_k = trial.suggest_int('subset_k', 0, len(feat_cols))
-            all_tag_selections = itertools.combinations(feat_cols, subset_size_k)
-            
-            selected_tags = trial.suggest_categorical('selected_tags', list(all_tag_selections))
-            combination_values = {}
-            for tag in selected_tags:
-                unique_values = df[tag].unique().tolist()
-                combination_values[tag] = trial.suggest_categorical(f'value_{tag}', unique_values)
-            
-            mask = pd.Series([True] * len(df))
-            for tag, value in combination_values.items():
-                mask &= df[tag] == value
-            
-            if score_mode == 'mean':
-                score = df.loc[mask, y_col].mean()
-            else:
-                raise NotImplemented('score mode not supported')
-            
-            return score
+        all_tag_unique_values = {col: df[col].unique().tolist() for col in feat_cols}
         
-        study = create_study(direction=StudyDirection.MAXIMIZE if config.direction == 'maximize' else StudyDirection.MINIMIZE, study_name=config.study_name, sampler=TPESampler())
-        study.optimize(objective, n_trials=config.n_trials, n_jobs=config.n_jobs, timeout=config.timeout)
+        def objective(trial: optuna.Trial):
+            selected_tags = []
+            combination_values = {}
+            for tag in feat_cols:
+                include = trial.suggest_categorical(f'include_{tag}', [True, False])
+                if include:
+                    value = trial.suggest_categorical(f'value_{tag}', all_tag_unique_values[tag])
+                    selected_tags.append(tag)
+                    combination_values[tag] = value
+            
+            if selected_tags:
+                mask = pd.Series([True] * len(df), index=df.index)
+                for tag, value in combination_values.items():
+                    mask &= df[tag] == value
+            else:
+                return -np.inf
+
+            if score_mode == 'mean':
+                try:
+                    score = df.loc[mask][y_col].mean()
+                    if pd.isna(score):
+                        logging.warning(f"Score is NaN for trial with tags {combination_values}")
+                        return -np.inf  # Assign a very low score to failed trials
+                    trial.set_user_attr('remaining_rows', df.loc[mask].to_dict())
+                except Exception as e:
+                    logging.error(f"Error calculating mean for {y_col}: {e}")
+                    return -np.inf
+
+            return score
+
+        study = create_study(
+            direction=StudyDirection.MAXIMIZE if config.direction == 'maximize' else StudyDirection.MINIMIZE,
+            study_name=config.study_name,
+            sampler=TPESampler()
+        )
+        study.optimize(
+            objective,
+            n_trials=config.n_trials,
+            n_jobs=config.n_jobs,
+            timeout=config.timeout,
+            show_progress_bar=True
+        )
         best_params = study.best_params
         best_score = study.best_value
         print(f"Best parameters: {best_params}")
         print(f"Best score: {best_score}")
+        return study, best_params, best_score

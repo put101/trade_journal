@@ -1,0 +1,18 @@
+# Analyis in R 
+
+
+```{r}
+library(dplyr)
+trade_data <- read.csv("export/trade_data.csv")
+print(trade_data)
+```
+
+## test 
+
+# files in src folder
+```{r}
+# ROOT from JOURNAL_ROOT in .Renviron
+ROOT <- Sys.getenv("JOURNAL_ROOT")
+print(ROOT)
+list.files()
+```

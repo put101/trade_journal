@@ -389,6 +389,11 @@ full_df = j.to_dataframe(config=None)  # Pass the config object
 PA.add_tags_to_df(full_df)
 logging.info(f"DataFrame columns: {full_df.columns}")
 
+# Export the DataFrame and relevant columns for R analysis
+export_directory = j.EXPORT_PATH
+logging.info(f"Exporting stuff to: {export_directory}")
+j.export_dataframe_for_r(full_df, export_directory)
+
 get_number_of_trades = lambda df: len(df)
 get_set_of_tags = lambda df: frozenset([tag for tag in df.columns if tag != "uid"])
 get_number_of_tags = lambda df: len(get_set_of_tags(df))
