@@ -355,6 +355,7 @@ class TradeJournal:
         for trade in self.trades:
             md_path = os.path.join(output_dir, f"trade_{trade.uid}.md")
             full_row = df[df['trade_uid'] == trade.uid].to_dict(orient='records')
+            pretty_row = json.dumps(full_row, indent=4, default=str)  # Pretty print JSON
             md_content = f"# Trade Summary\n\n"
             md_content += f"**Trade UID:** {trade.uid} \n\n"
             md_content += f"**Tags:**\n"
@@ -365,7 +366,7 @@ class TradeJournal:
 
             md_content += f"## Full DataRow\n\n"
             md_content += "```\n"
-            md_content += f"{full_row}\n"
+            md_content += f"{pretty_row}\n"
             md_content += "```\n\n"
 
             md_content += f"## Assets\n\n"
