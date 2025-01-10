@@ -298,7 +298,7 @@ class TradeJournal:
             "This plot shows the distribution of returns for the trades. The histogram provides a visual representation of the frequency of different return values.",
             "## DataFrame",
             df.to_markdown(index=False),
-            "## Specific Queries",
+            "## Detailed Queries",  # Renamed from "Specific Queries"
         ]
 
         # Generate links to specific query markdown files
@@ -354,10 +354,19 @@ class TradeJournal:
 
         for trade in self.trades:
             md_path = os.path.join(output_dir, f"trade_{trade.uid}.md")
+            full_row = df[df['trade_uid'] == trade.uid].to_dict(orient='records')
             md_content = f"# Trade Summary\n\n"
             md_content += f"**Trade UID:** {trade.uid} \n\n"
-            md_content += f"**Tags:** {
-                ', '.join([f'{tag.key}:{tag.value}' for tag in trade.tags])}\n\n"
+            md_content += f"**Tags:**\n"
+            md_content += "```\n"
+            for tag in trade.tags:
+                md_content += f"{tag.key}: {tag.value}\n"
+            md_content += "```\n\n"
+
+            md_content += f"## Full DataRow\n\n"
+            md_content += "```\n"
+            md_content += f"{full_row}\n"
+            md_content += "```\n\n"
 
             md_content += f"## Assets\n\n"
             if trade.uid in assets:
