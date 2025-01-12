@@ -197,8 +197,6 @@ This plot shows the distribution of returns for the trades. The histogram provid
 - [Trade 13](trade_13.md)
 - [Trade 14](trade_14.md)
 ## Optuna Studies
-- [default_1](studies.md#34)
-- [default_1](studies.md#34)
-- [default_1](studies.md#34)
-- [default_1](studies.md#34)
-- [default_1](studies.md#34)
+- [[studies.md### default_1 - 34]]
+- [[studies.md### default_1 - 34]]
+- [[studies.md### default_1 - 34]]
