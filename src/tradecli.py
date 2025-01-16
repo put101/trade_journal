@@ -594,7 +594,7 @@ class TradeJournal:
         parquet_path = os.path.join(export_dir, 'trade_data.parquet')
         df.to_parquet(parquet_path)
         logging.info(f"Exported DataFrame to {parquet_path}")
-        
+       
         # Save DataFrame to json
         json_path = os.path.join(export_dir, 'trade_data.json')
         df.to_json(json_path)

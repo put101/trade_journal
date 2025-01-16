@@ -118,11 +118,11 @@ class Outcome:
     
     IGNORED_TAGS = []
     CATEGORICAL_TAGS = ["outcome"]
+    ALL_TAGS = frozenset(TF.ALL_TAGS + [PA.type_1_(tf) for tf in TF.ALL_TAGS] + [PA.type_2_(tf) for tf in TF.ALL_TAGS])
+
 
 TYPE_3_M15 = PA.type_3_(TF.m15)
-        
-ALL_TAGS = frozenset(TF.ALL_TAGS + [PA.type_1_(tf) for tf in TF.ALL_TAGS] + [PA.type_2_(tf) for tf in TF.ALL_TAGS])
-print(ALL_TAGS)
+
 
 class TradePosition:
     TAG_ENTRY_PRICE = "entry_price"
@@ -161,6 +161,8 @@ class TradePosition:
                     TAG_TP_DISTANCE,TAG_RETURN]
     
 
+
+
 class InitialReward:
     """Represents the initial planned reward and risk reward ratio of a trade.
     """
@@ -186,6 +188,10 @@ class InitialReward:
             trade.add_tag("initial_return", InitialReward.calculate_initial_return(entry_price, tp_price))
     
     IGNORED_TAGS = [TAG_RR, TAG_RETURN]
+
+
+
+
 
 class PotentialReward:
     TAG_RR = 'potential_risk_reward'
@@ -278,6 +284,26 @@ class RR:
     
     IGNORED_TAGS = []
 
+
+
+@dataclass
+class Account:
+    account_name: str
+
+    IGNORED_TAGS = ["account_name"]
+    CATEGORICAL_TAGS = ["account_name"]
+    
+    DEFAULT = "default"
+
+    @staticmethod
+    def add_default(trade: Trade):
+        trade.add_tag("account_name", Account.DEFAULT)
+    
+    @staticmethod
+    def add_account_to_trade(trade: Trade, account_name: str):
+        trade.add_tag("account", account_name)
+
+
 def get_all_ignored_tags() -> List[str]:
     ignored_tags = []
     classes = [TF, PA, Confidence, MultiTimeframeAnalysis, RiskManagement, Outcome, TradePosition, InitialReward, PotentialReward, EntryTime, Sessions, RR]
@@ -299,9 +325,10 @@ j.get_all_ignored_tags = get_all_ignored_tags
 # Define Configuration
 
 logging.info("Creating initial trades")
-t = Trade(uid="1")
+t = Trade(uid="1001")
 t.add_tag(PA.type_1_(TF.m1), True)
 t.add_tag(TYPE_3_M15, True)
+Account.add_default(t )
 j.add_trade(t)
 position = TradePosition(trade_uid="1", entry_price=1.1000, sl_price=1.0950, tp_price=1.1100)
 position.add_tags_to_trade(t)
@@ -309,8 +336,9 @@ EntryTime(entry_time=datetime.now()).add_tags_to_trade(t)
 RR.add_tags_to_trade(t)
 Confidence.add_tags_to_trade(t, 3)  # Ensure confidence is added
 
-t = Trade(uid="2")
+t = Trade(uid="1002")
 t.add_tag(PA.type_2_(TF.h1), True)
+Account.add_default(t)
 j.add_trade(t)
 position = TradePosition(trade_uid="2", entry_price=1.2000, sl_price=1.1850, tp_price=1.2100, close_price=1.1855)
 position.add_tags_to_trade(t)
@@ -320,8 +348,9 @@ MultiTimeframeAnalysis.add_tags_to_trade(t, True)
 Confidence.add_tags_to_trade(t, 2)  # Ensure confidence is added
 
 
-t = Trade(uid="3")
+t = Trade(uid="1003")
 t.add_tag("SL_distance", 0.5)
+Account.add_default(t)
 j.add_trade(t)
 position = TradePosition(trade_uid="3", entry_price=1.3000, sl_price=1.2970, tp_price=1.3300)
 position.add_tags_to_trade(t)
@@ -330,8 +359,9 @@ MultiTimeframeAnalysis.add_tags_to_trade(t, False)
 
 
 t = t.copy()
-t.uid = "4"
+t.uid = "1004"
 t.add_tag("management_strategy", "strategy_2")
+Account.add_default(t)
 position = TradePosition(trade_uid="4", entry_price=1.3000, sl_price=1.2950, tp_price=1.9100, close_price=1.3050)
 position.add_tags_to_trade(t)
 EntryTime(entry_time=pd.Timestamp("2024-12-25 10:00:00")).add_tags_to_trade(t)
@@ -349,9 +379,11 @@ timeframes = TF.ALL_TAGS
 logging.info("Adding more trades to the journal")
 # Add more entries to the journal using a loop with random choices
 for i in range(5, 15):
-    t = Trade(uid=str(i))
+    t = Trade(uid=str(1000+i))
     t.add_tag(random.choice([PA.type_1_(tf) for tf in timeframes]), True)
     t.add_tag(random.choice([PA.type_2_(tf) for tf in timeframes]), True)
+    t.add_tag("unit_test", True)  # Add unit_test tag
+    Account.add_account_to_trade(t, "test_account")  # Add account tag
     j.add_trade(t)
     entry_price = round(1.1000 + random.uniform(0.01, 0.05), 4)
     # long only
@@ -366,6 +398,22 @@ for i in range(5, 15):
     Confidence.add_tags_to_trade(t, random.choice(confidence_levels))  # Ensure confidence is added
     PotentialReward.add_tags_to_trade(t, round(entry_price + random.uniform(0.01, 0.05), 4))
     RiskManagement.add_tags_to_trade(t, random.choice(management_strategies))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## AUTOMATIC FINISH
 
 logging.info("Adding default tags to all trades")
 # add defaults to all trades or certain tags that should not be None
