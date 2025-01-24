@@ -336,6 +336,14 @@ EntryTime(entry_time=datetime.now()).add_tags_to_trade(t)
 RR.add_tags_to_trade(t)
 Confidence.add_tags_to_trade(t, 3)  # Ensure confidence is added
 
+
+
+
+
+
+
+
+
 t = Trade(uid="1002")
 t.add_tag(PA.type_2_(TF.h1), True)
 Account.add_default(t)

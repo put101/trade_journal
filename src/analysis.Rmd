@@ -7,6 +7,16 @@ trade_data <- read.csv("export/trade_data.csv")
 print(trade_data)
 ```
 
+
+```{r}
+print('TEST')
+
+alpha=0.05
+qnorm(p=(1-alpha/2)) # 1.96, 95% CI
+
+```
+
+
 ## test 
 
 # files in src folder
