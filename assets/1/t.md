@@ -1,3 +1,0 @@
-My Trade
-
-![](image.png)

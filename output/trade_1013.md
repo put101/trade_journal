@@ -4,51 +4,48 @@
 
 **Tags:**
 ```
-type_1_d: True
-type_2_d: True
+type_1_h1: True
+type_2_m5: True
+type_3_m30: True
 unit_test: True
 account: test_account
-entry_price: 1.1113
-sl_price: 1.1019
-tp_price: 1.144
-close_price: 1.1197
-SL_distance: 0.009399999999999853
-TP_distance: 0.03269999999999995
-return: 0.008399999999999963
+entry_price: 1.1249
+sl_price: 1.1199000000000001
+tp_price: 1.1448641267148845
+close_price: 1.11815
+SL_distance: 0.004999999999999893
+TP_distance: 0.019964126714884456
+return: -0.006750000000000034
 side: long
-entry_time: 2025-01-23 21:01:25.209587
-risk_reward_ratio: 3.4787234042553683
+entry_time: 2025-01-23 00:04:51.295959106
+rr: -1.3500000000000356
+outcome: loss
 htf_poi_ltf_confirmation: True
-numerical_confidence: 4
-potential_risk_reward: 1.3404255319149088
-potential_return: 0.012599999999999945
-potential_price: 1.1239
-management_strategy: be_after_1r
+numerical_confidence: 1
+management_strategy: no_management
 session: tokyo
-risk_reward_ratio: 3.4787234042553683
-outcome: win
-initial_risk_reward: 3.4787234042553683
-initial_return: 0.03269999999999995
+rr: -1.3500000000000356
+initial_risk_reward: 3.9928253429769764
+initial_return: 0.019964126714884456
 type_1_m1: False
 type_1_m5: False
 type_1_m15: False
 type_1_m30: False
-type_1_h1: False
 type_1_h4: False
+type_1_d: False
 type_1_w: False
 type_1_M: False
 type_2_m1: False
-type_2_m5: False
 type_2_m15: False
 type_2_m30: False
 type_2_h1: False
 type_2_h4: False
+type_2_d: False
 type_2_w: False
 type_2_M: False
 type_3_m1: False
 type_3_m5: False
 type_3_m15: False
-type_3_m30: False
 type_3_h1: False
 type_3_h4: False
 type_3_d: False
@@ -62,65 +59,65 @@ type_3_M: False
 [
     {
         "trade_uid": "1013",
-        "entry_time": "2025-01-23 21:01:25.209587",
-        "potential_risk_reward": 1.3404255319149088,
-        "outcome": "win",
-        "tp_price": 1.144,
-        "unit_test": true,
-        "type_2_M": false,
-        "type_1_h4": false,
-        "type_1_w": false,
-        "session": "tokyo",
-        "initial_return": 0.03269999999999995,
-        "type_3_m15": false,
-        "type_2_m30": false,
-        "type_1_M": false,
-        "type_3_m30": false,
-        "management_strategy": "be_after_1r",
-        "risk_reward_ratio": 3.4787234042553683,
-        "type_2_m1": false,
-        "type_1_m30": false,
-        "numerical_confidence": 4.0,
-        "close_price": 1.1197,
-        "type_2_m5": false,
+        "outcome": "loss",
+        "potential_risk_reward": NaN,
+        "TP_distance": 0.019964126714884456,
+        "type_3_m30": true,
         "side": "long",
-        "SL_distance": 0.009399999999999853,
-        "type_3_m1": false,
-        "type_2_w": false,
-        "type_3_m5": false,
-        "return": 0.008399999999999963,
-        "htf_poi_ltf_confirmation": true,
-        "type_3_M": false,
-        "potential_return": 0.012599999999999945,
-        "type_1_m1": false,
-        "type_2_d": true,
-        "type_3_h1": false,
+        "initial_risk_reward": 3.9928253429769764,
         "type_3_d": false,
-        "potential_price": 1.1239,
-        "account_name": null,
-        "type_3_h4": false,
-        "type_3_w": false,
-        "TP_distance": 0.03269999999999995,
-        "initial_risk_reward": 3.4787234042553683,
-        "type_1_m15": false,
-        "type_2_h4": false,
+        "type_3_M": false,
+        "potential_return": NaN,
         "type_2_m15": false,
-        "type_1_h1": false,
-        "type_2_h1": false,
-        "account": "test_account",
-        "entry_price": 1.1113,
-        "sl_price": 1.1019,
+        "type_3_h4": false,
+        "entry_price": 1.1249,
+        "type_3_m1": false,
+        "type_3_w": false,
+        "unit_test": true,
         "type_1_m5": false,
-        "type_1_d": true,
+        "type_1_m30": false,
+        "rr": -1.3500000000000356,
+        "type_1_h1": true,
+        "type_3_m5": false,
+        "session": "tokyo",
+        "type_2_h1": false,
+        "type_2_m1": false,
+        "close_price": 1.11815,
+        "type_2_h4": false,
+        "initial_return": 0.019964126714884456,
+        "numerical_confidence": 1.0,
+        "type_3_m15": false,
+        "type_1_M": false,
+        "return": -0.006750000000000034,
+        "account_name": null,
+        "type_1_w": false,
+        "type_2_m30": false,
+        "type_2_d": false,
+        "account": "test_account",
+        "potential_price": NaN,
+        "tp_price": 1.1448641267148845,
+        "type_2_w": false,
+        "type_2_m5": true,
+        "SL_distance": 0.004999999999999893,
+        "type_3_h1": false,
+        "type_1_d": false,
+        "type_1_m1": false,
+        "type_2_M": false,
+        "entry_time": "2025-01-23 00:04:51.295959106",
+        "type_1_h4": false,
+        "type_1_m15": false,
+        "management_strategy": "no_management",
+        "sl_price": 1.1199000000000001,
+        "htf_poi_ltf_confirmation": true,
         "htf_poi_ltf_confirmation_False": false,
         "htf_poi_ltf_confirmation_True": true,
-        "management_strategy_be_after_1r": true,
+        "management_strategy_be_after_1r": false,
         "management_strategy_be_after_push": false,
-        "management_strategy_close_early": false,
-        "management_strategy_no_management": false,
+        "management_strategy_no_management": true,
         "management_strategy_strategy_2": false,
-        "outcome_loss": false,
-        "outcome_win": true
+        "outcome_be": false,
+        "outcome_loss": true,
+        "outcome_win": false
     }
 ]
 ```

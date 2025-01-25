@@ -4,6 +4,7 @@ import os
 import random
 import logging
 import re  # Add regex module for pattern matching
+import scipy
 from src.tradecli import * 
 
 logging.basicConfig(level=logging.INFO)
@@ -90,35 +91,36 @@ class RiskManagement:
     CATEGORICAL_TAGS = ["management_strategy"]
 
 class Outcome:
+    """Categorical variable, win or loss (breakeven if below a certain threshold).
+    Uses 'rr' tag to determine the outcome.
+    """
+    
     WIN = "win"
     LOSS = "loss"
-    BREAKEVEN = "breakeven"
-    def add_tags_to_trade(trade: Trade, outcome: str):
-        trade.add_tag("outcome", outcome)
+    BE_THESHOLD = 0.2 # Breakeven threshold (pos and neg)
+    BE = "be"
     
-    def add_tags_to_trade_auto(trade: Trade):
-        if trade.has_tag("outcome"):
-            return None # already has outcome
+    @staticmethod
+    def get_outcome(rr: float) -> str:
+        return Outcome.WIN if rr > 0 else (Outcome.BE if abs(rr) < Outcome.BE_THESHOLD else Outcome.LOSS)
+    
+    def add_tags_to_trade(trade: Trade):
+        rr = next((t.value for t in trade.tags if t.key == "rr"), None)
+        if not rr:
+            logging.warning(f"Trade {trade.uid} does not have the 'rr' tag")
         
-        ret = next((t.value for t in trade.tags if t.key == "return"), None)
-        if ret is None:
-            return None
-        
-        if ret > 0:
-            outcome = Outcome.WIN
-        elif ret < 0:
-            outcome = Outcome.LOSS
-        else:
-            outcome = Outcome.BREAKEVEN
-        
-        trade.add_tag("outcome", outcome)
-       
+        if rr is not None:
+            trade.add_tag("outcome", Outcome.get_outcome(rr))
+    
     def add_tags_to_df(df: pd.DataFrame):
-        df['outcome'] = df['return'].apply(lambda x: Outcome.WIN if x > 0 else (Outcome.LOSS if x < 0 else Outcome.BREAKEVEN))
+        if not "rr" in df.columns:
+            raise ValueError("DataFrame must have the 'rr' column")
+        
+        df["outcome"] = df["rr"].apply(lambda x: Outcome.get_outcome(x))
+        
     
     IGNORED_TAGS = []
     CATEGORICAL_TAGS = ["outcome"]
-    ALL_TAGS = frozenset(TF.ALL_TAGS + [PA.type_1_(tf) for tf in TF.ALL_TAGS] + [PA.type_2_(tf) for tf in TF.ALL_TAGS])
 
 
 TYPE_3_M15 = PA.type_3_(TF.m15)
@@ -189,14 +191,9 @@ class InitialReward:
     
     IGNORED_TAGS = [TAG_RR, TAG_RETURN]
 
-
-
-
-
 class PotentialReward:
     TAG_RR = 'potential_risk_reward'
     TAG_RETURN = 'potential_return'
-    
     TAG_PRICE = 'potential_price'
     @staticmethod
     def calculate_potential_risk_reward(entry_price: float, sl_price: float, potential_price: float) -> float:
@@ -267,20 +264,23 @@ class Sessions:
     IGNORED_TAGS = []
 
 class RR:
-    TAG_RR = "risk_reward_ratio"
+    """Risk Reward Ratio (Actual / Closed)
+    """
+    TAG_RR = "rr"
     DEFAULT_RR = 0.0
     
     @staticmethod
-    def calculate_risk_reward_ratio(entry_price: float, sl_price: float, tp_price: float) -> float:
-        return (tp_price - entry_price) / (entry_price - sl_price)
+    def calculate_risk_reward_ratio(entry_price: float, sl_price: float, close_price: float) -> float:
+        return (close_price - entry_price) / (entry_price - sl_price)
+    
     @staticmethod
     def add_tags_to_trade(trade: Trade):
         entry_price = next((t.value for t in trade.tags if t.key == "entry_price"), None)
         sl_price = next((t.value for t in trade.tags if t.key == "sl_price"), None)
-        tp_price = next((t.value for t in trade.tags if t.key == "tp_price"), None)
-        if entry_price is not None and sl_price is not None and tp_price is not None:
-            rr = RR.calculate_risk_reward_ratio(entry_price, sl_price, tp_price)
-            trade.add_tag("risk_reward_ratio", rr)
+        close_price = next((t.value for t in trade.tags if t.key == "close_price"), None)
+        if entry_price is not None and sl_price is not None and close_price is not None:
+            rr = RR.calculate_risk_reward_ratio(entry_price, sl_price, close_price)
+            trade.add_tag(RR.TAG_RR, rr)
     
     IGNORED_TAGS = []
 
@@ -390,33 +390,57 @@ for i in range(5, 15):
     t = Trade(uid=str(1000+i))
     t.add_tag(random.choice([PA.type_1_(tf) for tf in timeframes]), True)
     t.add_tag(random.choice([PA.type_2_(tf) for tf in timeframes]), True)
+    t.add_tag(random.choice([PA.type_3_(tf) for tf in timeframes]), True)
     t.add_tag("unit_test", True)  # Add unit_test tag
     Account.add_account_to_trade(t, "test_account")  # Add account tag
     j.add_trade(t)
     entry_price = round(1.1000 + random.uniform(0.01, 0.05), 4)
-    # long only
-    sl_price = round(entry_price - random.uniform(0.005, 0.01), 4)
-    tp_price = round(entry_price + random.uniform(0.01, 0.05), 4)
-    close_price = round(entry_price + random.uniform(-0.02, 0.02), 4) if random.random() > 0.5 else None
+    # long and short trades, with possible SL and TP    
+    is_long = random.choice([True, False])
+    rr = random.uniform(1, 10.0)
+    WR = 0.7
+    SL_POINTS = 0.005
+    SL_POINTS_VARIANCE = 0.001
+    is_win = random.choices([True, False], weights=[WR, 1-WR], k=1)[0]
+    
+    
+    if is_win:
+        actual_rr = random.uniform(0, 10.0)
+    else:
+        actual_rr = random.uniform(-1.50, 0)
+        
+    actual_rr = round(actual_rr, 2)
+    
+    
+    if is_long:
+        entry_price = round(entry_price, 4)
+        sl_price = entry_price - SL_POINTS
+        tp_price = entry_price + SL_POINTS * rr
+        close_price = entry_price + SL_POINTS * actual_rr
+    else:
+        entry_price = round(entry_price, 4)
+        sl_price = entry_price + SL_POINTS
+        tp_price = entry_price - SL_POINTS * rr
+        close_price = entry_price - SL_POINTS * actual_rr
+    
     position = TradePosition(trade_uid=str(i), entry_price=entry_price, sl_price=sl_price, tp_price=tp_price, close_price=close_price)
     position.add_tags_to_trade(t)
-    EntryTime(entry_time=datetime.now()).add_tags_to_trade(t)
+    # choose random entry timestamp date, hour, minue within the last 30 days from now
+    # the date should around each working day of the week
+    # the hour should be normally distributed around 09:00 GMT+2, tz="Europe/Berlin"
+    # the minute should be normally distributed around 00, 15, 30, 45
+    hour = scipy.stats.truncnorm.rvs(-1, 1, loc=9, scale=1)
+    minute = random.choice([0, 15, 30, 45])
+    minute = scipy.stats.truncnorm.rvs(-1, 1, loc=minute, scale=15) # Normally distributed around 0, 15, 30, 45
+    entry_time = pd.Timestamp.now() + pd.Timedelta(days=random.randint(-30, 0), hours=hour, minutes=minute)
+    # convert the timestamp 
+    EntryTime(entry_time=entry_time).add_tags_to_trade(t)
+    #EntryTime(entry_time=datetime.now()).add_tags_to_trade(t)
     RR.add_tags_to_trade(t)
+    Outcome.add_tags_to_trade(t)
     MultiTimeframeAnalysis.add_tags_to_trade(t, random.choice([True, False]))
-    Confidence.add_tags_to_trade(t, random.choice(confidence_levels))  # Ensure confidence is added
-    PotentialReward.add_tags_to_trade(t, round(entry_price + random.uniform(0.01, 0.05), 4))
+    Confidence.add_tags_to_trade(t, random.choice(confidence_levels))  # Ensure confidence is added    
     RiskManagement.add_tags_to_trade(t, random.choice(management_strategies))
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -428,9 +452,7 @@ logging.info("Adding default tags to all trades")
 for trade in j.trades:
     Sessions.add_tags_to_trade(trade)
     RR.add_tags_to_trade(trade)
-    Outcome.add_tags_to_trade_auto(trade)
     InitialReward.add_tags_to_trade(trade)
-    
     # DEFAULTS
     RiskManagement.add_tags_to_trade(trade, RiskManagement.NO_MANAGEMENT)
     # set False for the PA tags that are not set
@@ -441,9 +463,14 @@ for trade in j.trades:
 logging.info("Converting journal trades to DataFrame")
 full_df = j.to_dataframe(config=None)  # Pass the config object
 
+
 # ADDITIONAL FEATURES
 PA.add_tags_to_df(full_df)
 logging.info(f"DataFrame columns: {full_df.columns}")
+
+FULL_DF = full_df.copy()
+def get_full_df():
+    return FULL_DF.copy()
 
 # Export the DataFrame and relevant columns for R analysis
 export_directory = j.EXPORT_PATH
