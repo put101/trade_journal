@@ -41,6 +41,13 @@ class PA:
     def has_PA_tags(trade: Trade) -> bool:
         return any(t for t in trade.tags if t.key in PA.ALL_TAGS)
 
+    def add_tags(trade:Trade, pas:list[str]):
+        for pa in PA.ALL_TAGS():
+            if pa in pas:
+                trade.add_tag(pa, True)
+            else:
+                trade.add_tag(pa, False)
+
     def add_tags_to_df(df: pd.DataFrame):
         # Add additional features/tags
         df['has_type_1'] = df[[col for col in df.columns if col.startswith('type_1_')]].any(axis=1)
@@ -74,6 +81,44 @@ class MultiTimeframeAnalysis:
     
     IGNORED_TAGS = []
     CATEGORICAL_TAGS = ["htf_poi_ltf_confirmation"]
+
+## START POI
+class POI:
+    TAG_POI = "pois"
+    DEFAULT_POI = None
+    TYPE_POI = list[str]
+    
+    POI_1H_SC = 'poi_1h_sc'
+    POI_1H_LIQUIDITY_GRAB = 'poi_1h_liquidity_grab'
+    POI_1H_MITIGATION = 'poi_1h_mitigation'
+    
+    POI_15M_SC = 'poi_15m_sc'
+    POI_15M_LIQUIDITY_GRAB = 'poi_15m_liquidity_grab'
+    POI_15M_MITIGATION = 'poi_15m_mitigation'
+    
+    POI_1M_SC = 'poi_1m_sc'
+    POI_1M_LIQUIDITY_GRAB = 'poi_1m_liquidity_grab'
+    POI_1M_MITIGATION = 'poi_1m_mitigation'
+    
+    # set the ALL_TAGS after the class is ready (POI class is defined)
+    ALL_TAGS = None
+    
+    # all Tgas are the specific POIs, get them from class definiton starting with POI_    
+    @staticmethod
+    def get_poi_tags():
+        return [getattr(POI,attr) for attr in dir(POI) if not callable(getattr(POI, attr)) and not attr.startswith("__") and attr.startswith("POI")]
+    
+    def add_tags(trade: Trade, pois : list[str]):
+        trade.add_tag("poi", tuple(list(set(pois))))
+        
+        for poi in POI.ALL_TAGS:
+            if poi in pois:
+                trade.add_tag(poi, True)
+            if poi not in pois:
+                trade.add_tag(poi, False)
+
+POI.ALL_TAGS=POI.get_poi_tags()
+## END POI        
 
 class RiskManagement:
     """Self explanatory.
@@ -137,8 +182,7 @@ class TradePosition:
     
     DEFAULT_PRICES = None
     
-    def __init__(self, trade_uid: str, entry_price: float, sl_price: float, tp_price: float, close_price: float = None):
-        self.trade_uid = trade_uid
+    def __init__(self, entry_price: float, sl_price: float, tp_price: float, close_price: float = None):
         self.entry_price = entry_price
         self.sl_price = sl_price
         self.tp_price = tp_price
@@ -278,13 +322,20 @@ class RR:
         entry_price = next((t.value for t in trade.tags if t.key == "entry_price"), None)
         sl_price = next((t.value for t in trade.tags if t.key == "sl_price"), None)
         close_price = next((t.value for t in trade.tags if t.key == "close_price"), None)
+        prices = [entry_price, sl_price, close_price]
+        
         if entry_price is not None and sl_price is not None and close_price is not None:
             rr = RR.calculate_risk_reward_ratio(entry_price, sl_price, close_price)
             trade.add_tag(RR.TAG_RR, rr)
+        else:
+            logging.warning(f'trade {trade.uid}: RR calculation failed. Some prices are missing: { dict(zip(["entry_price", "sl_price", "close_price"], prices)) }')
     
     IGNORED_TAGS = []
 
 
+ACC_IDEAL = "ideal"
+ACC_MT5_VANTAGE = "mt5_vantage"
+ACC_TEST = "test_account"
 
 @dataclass
 class Account:
@@ -322,62 +373,8 @@ j = TradeJournal()
 j.get_all_categorical_tags = get_all_categorical_tags
 j.get_all_ignored_tags = get_all_ignored_tags
 
-# Define Configuration
 
-logging.info("Creating initial trades")
-t = Trade(uid="1001")
-t.add_tag(PA.type_1_(TF.m1), True)
-t.add_tag(TYPE_3_M15, True)
-Account.add_default(t )
-j.add_trade(t)
-position = TradePosition(trade_uid="1", entry_price=1.1000, sl_price=1.0950, tp_price=1.1100)
-position.add_tags_to_trade(t)
-EntryTime(entry_time=datetime.now()).add_tags_to_trade(t)
-RR.add_tags_to_trade(t)
-Confidence.add_tags_to_trade(t, 3)  # Ensure confidence is added
-
-
-
-
-
-
-
-
-
-t = Trade(uid="1002")
-t.add_tag(PA.type_2_(TF.h1), True)
-Account.add_default(t)
-j.add_trade(t)
-position = TradePosition(trade_uid="2", entry_price=1.2000, sl_price=1.1850, tp_price=1.2100, close_price=1.1855)
-position.add_tags_to_trade(t)
-EntryTime(entry_time=datetime.now()).add_tags_to_trade(t)
-RR.add_tags_to_trade(t)
-MultiTimeframeAnalysis.add_tags_to_trade(t, True)
-Confidence.add_tags_to_trade(t, 2)  # Ensure confidence is added
-
-
-t = Trade(uid="1003")
-t.add_tag("SL_distance", 0.5)
-Account.add_default(t)
-j.add_trade(t)
-position = TradePosition(trade_uid="3", entry_price=1.3000, sl_price=1.2970, tp_price=1.3300)
-position.add_tags_to_trade(t)
-EntryTime(entry_time=pd.Timestamp("2024-12-27 10:00:01")).add_tags_to_trade(t)
-MultiTimeframeAnalysis.add_tags_to_trade(t, False)
-
-
-t = t.copy()
-t.uid = "1004"
-t.add_tag("management_strategy", "strategy_2")
-Account.add_default(t)
-position = TradePosition(trade_uid="4", entry_price=1.3000, sl_price=1.2950, tp_price=1.9100, close_price=1.3050)
-position.add_tags_to_trade(t)
-EntryTime(entry_time=pd.Timestamp("2024-12-25 10:00:00")).add_tags_to_trade(t)
-RR.add_tags_to_trade(t)
-j.add_trade(t)
-PotentialReward.add_tags_to_trade(t, 1.3150)
-Confidence.add_tags_to_trade(t, 4)
-MultiTimeframeAnalysis.add_tags_to_trade(t, True)
+### TEST DATA START
 
 # Define distributions for different tags
 confidence_levels = [1, 2, 3, 4, 5]
@@ -423,7 +420,7 @@ for i in range(5, 15):
         tp_price = entry_price - SL_POINTS * rr
         close_price = entry_price - SL_POINTS * actual_rr
     
-    position = TradePosition(trade_uid=str(i), entry_price=entry_price, sl_price=sl_price, tp_price=tp_price, close_price=close_price)
+    position = TradePosition(entry_price=entry_price, sl_price=sl_price, tp_price=tp_price, close_price=close_price)
     position.add_tags_to_trade(t)
     # choose random entry timestamp date, hour, minue within the last 30 days from now
     # the date should around each working day of the week
@@ -442,10 +439,47 @@ for i in range(5, 15):
     Confidence.add_tags_to_trade(t, random.choice(confidence_levels))  # Ensure confidence is added    
     RiskManagement.add_tags_to_trade(t, random.choice(management_strategies))
 
+## TEST DATA END
+
+def create_ideal_trade(uid: str, entry_price: float, sl_price: float, tp_price: float, close_price: Optional[float] = None) -> Trade:
+    trade = Trade(uid=uid, execution_type="ideal")
+    position = TradePosition(trade_uid=uid, entry_price=entry_price, sl_price=sl_price, tp_price=tp_price, close_price=close_price)
+    position.add_tags_to_trade(trade)
+    EntryTime(entry_time=datetime.now()).add_tags_to_trade(trade)
+    RR.add_tags_to_trade(trade)
+    Outcome.add_tags_to_trade(trade)
+    MultiTimeframeAnalysis.add_tags_to_trade(trade, random.choice([True, False]))
+    Confidence.add_tags_to_trade(trade, random.choice(confidence_levels))
+    RiskManagement.add_tags_to_trade(trade, RiskManagement.NO_MANAGEMENT)
+    return trade
+
+# Example of tracking one setup with actual account execution and ideal execution
+logging.info("Creating example trades for actual and ideal executions")
 
 
+t1 = None #TODO
+t2 = Trade(uid="2")
+t2.add_tag('taken', True)
+Account.add_account_to_trade(t2, ACC_MT5_VANTAGE)
+EntryTime(pd.Timestamp('2025-02-18 14:10:00')).add_tags_to_trade(t2)
+TradePosition(entry_price=2914.03,sl_price=2910.94, tp_price=3000.0, close_price=None).add_tags_to_trade(t2)
 
-## AUTOMATIC FINISH
+print(t2)
+j.add_trade(t2)
+
+t4 = Trade(uid="4")
+Account.add_account_to_trade(t4, ACC_IDEAL)
+EntryTime(pd.Timestamp('2025-02-22 15:11:00')).add_tags_to_trade(t4)
+# limit order, tp hit
+TradePosition(entry_price=22_164.40, sl_price=22_179.09, tp_price=22_105.27, close_price=22_105.27).add_tags_to_trade(t4)
+PotentialReward.add_tags_to_trade(t4, 21_600.00)
+RiskManagement.add_tags_to_trade(t4, RiskManagement.BE_AFTER_PUSH)
+Confidence.add_tags_to_trade(t4, 5)
+POI.add_tags(t4, [POI.POI_1H_SC, POI.POI_1H_LIQUIDITY_GRAB, POI.POI_1M_SC])
+MultiTimeframeAnalysis.add_tags_to_trade(t4, True)
+PA.add_tags(t4, [PA.type_1_(TF.m15), PA.type_1_(TF.m5), PA.type_3_(TF.m1)])
+j.add_trade(t4)
+
 
 logging.info("Adding default tags to all trades")
 # add defaults to all trades or certain tags that should not be None
@@ -459,25 +493,16 @@ for trade in j.trades:
     for tag in PA.ALL_TAGS():
         if not trade.has_tag(tag):
             trade.add_tag(tag, False)
-    
-logging.info("Converting journal trades to DataFrame")
-full_df = j.to_dataframe(config=None)  # Pass the config object
 
 
-# ADDITIONAL FEATURES
-PA.add_tags_to_df(full_df)
-logging.info(f"DataFrame columns: {full_df.columns}")
-
-FULL_DF = full_df.copy()
 def get_full_df():
-    return FULL_DF.copy()
-
-# Export the DataFrame and relevant columns for R analysis
-export_directory = j.EXPORT_PATH
-logging.info(f"Exporting stuff to: {export_directory}")
-j.export_dataframe_for_r(full_df, export_directory)
+    return j.to_dataframe().copy()
 
 get_number_of_trades = lambda df: len(df)
 get_set_of_tags = lambda df: frozenset([tag for tag in df.columns if tag != "uid"])
 get_number_of_tags = lambda df: len(get_set_of_tags(df))
 get_number_of_trades_with_tag = lambda df, tag: len(df[df[tag].notnull()])
+
+
+# debug
+print(t4)

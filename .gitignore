@@ -2,3 +2,6 @@
 .Rhistory
 .RData
 .Ruserdata
+
+assets/*
+!assets/*/*.md

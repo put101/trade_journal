@@ -49,6 +49,7 @@ class Tag:
 class Trade:
     uid: str
     tags: List[Tag] = field(default_factory=list)
+    execution_type: str = "actual"  # Add this line to differentiate between actual and ideal trades
 
     def get_tags_dict(self) -> Dict[str, any]:
         return {tag.key: tag.value for tag in self.tags}

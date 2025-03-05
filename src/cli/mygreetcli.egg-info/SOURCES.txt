@@ -1,0 +1,8 @@
+cli.py
+setup.py
+mygreetcli.egg-info/PKG-INFO
+mygreetcli.egg-info/SOURCES.txt
+mygreetcli.egg-info/dependency_links.txt
+mygreetcli.egg-info/entry_points.txt
+mygreetcli.egg-info/requires.txt
+mygreetcli.egg-info/top_level.txt

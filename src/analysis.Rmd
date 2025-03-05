@@ -14,6 +14,12 @@ print('TEST')
 alpha=0.05
 qnorm(p=(1-alpha/2)) # 1.96, 95% CI
 
+
+# CI for Expected Value (mean) of normal dist.
+n=50
+# t-dist quantile
+qt(p = 1-alpha/2, df=n-1)
+
 ```
 
 
@@ -25,4 +31,342 @@ qnorm(p=(1-alpha/2)) # 1.96, 95% CI
 ROOT <- Sys.getenv("JOURNAL_ROOT")
 print(ROOT)
 list.files()
+
+
+install.packages(c("plotly", "MASS"))
+install.packages("mvtnorm")
+library(mvtnorm)
+
+
 ```
+
+
+```{r}
+# Load required libraries
+library(plotly)
+library(MASS)  # For generating multivariate normal samples
+
+# Generate synthetic data for two classes
+set.seed(0)
+n_samples <- 100
+
+# Class 1: y = +1
+mu1 <- c(2, 2)
+cov1 <- matrix(c(1, 0.5, 0.5, 1), nrow = 2)
+X1 <- mvrnorm(n_samples, mu1, cov1)
+
+# Class -1: y = -1
+mu2 <- c(-2, -2)
+cov2 <- matrix(c(1, -0.5, -0.5, 1), nrow = 2)
+X2 <- mvrnorm(n_samples, mu2, cov2)
+
+# Combine data
+X <- rbind(X1, X2)
+y <- c(rep(1, n_samples), rep(-1, n_samples))
+
+# Function to compute decision boundary parameters
+compute_boundary <- function(mu1, mu2, cov1, cov2) {
+  Sigma1_inv <- solve(cov1)
+  Sigma2_inv <- solve(cov2)
+  A <- 0.5 * (Sigma2_inv - Sigma1_inv)
+  b <- Sigma1_inv %*% mu1 - Sigma2_inv %*% mu2
+  c <- -0.5 * (t(mu1) %*% Sigma1_inv %*% mu1 - t(mu2) %*% Sigma2_inv %*% mu2) -
+    0.5 * (log(det(cov1)) - log(det(cov2)))
+  list(A = A, b = b, c = c)
+}
+
+# Compute boundary parameters
+boundary <- compute_boundary(mu1, mu2, cov1, cov2)
+
+# Decision boundary function
+g <- function(x1, x2, boundary) {
+  x <- matrix(c(x1, x2), nrow = 2)
+  -0.5 * t(x) %*% boundary$A %*% x + t(boundary$b) %*% x + boundary$c
+}
+
+# Generate grid for visualization
+x1_range <- seq(-6, 6, length.out = 300)
+x2_range <- seq(-6, 6, length.out = 300)
+grid <- expand.grid(x1 = x1_range, x2 = x2_range)
+
+# Compute decision boundary values
+grid$g_values <- apply(grid, 1, function(row) g(row["x1"], row["x2"], boundary))
+
+# Convert grid to matrix for dmvnorm
+grid_matrix <- as.matrix(grid[, c("x1", "x2")])  # Extract x1 and x2 as a matrix
+
+# Compute Gaussian PDFs
+pdf1 <- matrix(mvtnorm::dmvnorm(grid_matrix, mean = mu1, sigma = cov1), nrow = length(x1_range))
+pdf2 <- matrix(mvtnorm::dmvnorm(grid_matrix, mean = mu2, sigma = cov2), nrow = length(x1_range))
+
+# Reshape grid for plotly
+grid$z1 <- as.vector(pdf1)
+grid$z2 <- as.vector(pdf2)
+
+# Plot interactive 3D visualization with Plotly
+fig <- plot_ly()
+
+# Add PDF surfaces for Class +1 and Class -1
+fig <- fig %>%
+  add_surface(
+    x = x1_range, y = x2_range, z = pdf1,
+    colorscale = "Blues", opacity = 0.7, name = "Class +1 PDF"
+  ) %>%
+  add_surface(
+    x = x1_range, y = x2_range, z = pdf2,
+    colorscale = "Reds", opacity = 0.7, name = "Class -1 PDF"
+  )
+
+# Add decision boundary as a contour line
+fig <- fig %>%
+  add_contour(
+    x = x1_range, y = x2_range, z = matrix(grid$g_values, nrow = length(x1_range)),
+    contours = list(start = 0, end = 0, size = 0.1),
+    line = list(color = "green", width = 4), name = "Decision Boundary"
+  )
+
+# Add scatter points for the data
+fig <- fig %>%
+  add_markers(
+    x = X1[, 1], y = X1[, 2], z = rep(0, n_samples),
+    marker = list(color = "blue", size = 5), name = "Class +1"
+  ) %>%
+  add_markers(
+    x = X2[, 1], y = X2[, 2], z = rep(0, n_samples),
+    marker = list(color = "red", size = 5), name = "Class -1"
+  )
+
+# Layout adjustments
+fig <- fig %>%
+  layout(
+    title = "Interactive Gaussian Classifier Decision Boundary",
+    scene = list(
+      xaxis = list(title = "x1"),
+      yaxis = list(title = "x2"),
+      zaxis = list(title = "Probability Density")
+    )
+  )
+
+# Show plot
+fig
+
+
+```
+
+
+
+
+```{r}
+# Load required libraries
+library(plotly)
+library(mvtnorm)
+library(MASS)
+
+# Generate synthetic data for two classes
+set.seed(0)
+n_samples <- 100
+
+# Class 1: y = +1
+mu1 <- c(2, 2)
+cov1 <- matrix(c(1, 0.5, 0.5, 1), nrow = 2)
+X1 <- mvrnorm(n_samples, mu1, cov1)
+
+# Class -1: y = -1
+mu2 <- c(-2, -2)
+cov2 <- matrix(c(1, -0.5, -0.5, 1), nrow = 2)
+X2 <- mvrnorm(n_samples, mu2, cov2)
+
+# Combine data
+X <- rbind(X1, X2)
+y <- c(rep(1, n_samples), rep(-1, n_samples))
+
+# Function to compute decision boundary parameters
+compute_boundary <- function(mu1, mu2, cov1, cov2) {
+  Sigma1_inv <- solve(cov1)
+  Sigma2_inv <- solve(cov2)
+  A <- 0.5 * (Sigma2_inv - Sigma1_inv)
+  b <- Sigma1_inv %*% mu1 - Sigma2_inv %*% mu2
+  c <- -0.5 * (t(mu1) %*% Sigma1_inv %*% mu1 - t(mu2) %*% Sigma2_inv %*% mu2) -
+    0.5 * (log(det(cov1)) - log(det(cov2)))
+  list(A = A, b = b, c = c)
+}
+
+# Compute boundary parameters
+boundary <- compute_boundary(mu1, mu2, cov1, cov2)
+
+# Decision boundary function
+g <- function(x1, x2, boundary) {
+  x <- matrix(c(x1, x2), nrow = 2)
+  -0.5 * t(x) %*% boundary$A %*% x + t(boundary$b) %*% x + boundary$c
+}
+
+# Create a grid for visualization
+x1_range <- seq(-6, 6, length.out = 300)
+x2_range <- seq(-6, 6, length.out = 300)
+grid <- expand.grid(x1 = x1_range, x2 = x2_range)
+
+# Compute decision boundary values
+grid$g_values <- apply(grid, 1, function(row) g(row["x1"], row["x2"], boundary))
+
+# Extract points where g(x1, x2) = 0 (decision boundary line)
+boundary_points <- grid[abs(grid$g_values) < 0.01, c("x1", "x2")]
+boundary_points$z <- 0  # Project boundary onto z = 0 for visualization
+
+# Compute Gaussian PDFs
+grid_matrix <- as.matrix(grid[, c("x1", "x2")])
+pdf1 <- matrix(mvtnorm::dmvnorm(grid_matrix, mean = mu1, sigma = cov1), nrow = length(x1_range))
+pdf2 <- matrix(mvtnorm::dmvnorm(grid_matrix, mean = mu2, sigma = cov2), nrow = length(x1_range))
+
+# Create 3D interactive plot with Plotly
+fig <- plot_ly()
+
+# Add the Gaussian PDFs as surface plots
+fig <- fig %>%
+  add_surface(
+    x = x1_range, y = x2_range, z = pdf1,
+    colorscale = "Blues", opacity = 0.7, name = "Class +1 PDF"
+  ) %>%
+  add_surface(
+    x = x1_range, y = x2_range, z = pdf2,
+    colorscale = "Reds", opacity = 0.7, name = "Class -1 PDF"
+  )
+
+# Add decision boundary as a 3D line
+fig <- fig %>%
+  add_trace(
+    x = boundary_points$x1, y = boundary_points$x2, z = rep(0, nrow(boundary_points)),
+    mode = "lines",
+    line = list(color = "green", width = 5),
+    name = "Decision Boundary"
+  )
+
+# Add scatter points for the data
+fig <- fig %>%
+  add_markers(
+    x = X1[, 1], y = X1[, 2], z = rep(0, n_samples),
+    marker = list(color = "blue", size = 5), name = "Class +1"
+  ) %>%
+  add_markers(
+    x = X2[, 1], y = X2[, 2], z = rep(0, n_samples),
+    marker = list(color = "red", size = 5), name = "Class -1"
+  )
+
+# Layout adjustments
+fig <- fig %>%
+  layout(
+    title = "Interactive Gaussian Classifier Decision Boundary",
+    scene = list(
+      xaxis = list(title = "x1"),
+      yaxis = list(title = "x2"),
+      zaxis = list(title = "Probability Density")
+    )
+  )
+
+# Show plot
+fig
+
+```
+
+```{r}
+
+# Install MASS (likely pre-installed in R)
+install.packages("MASS")
+
+# Install caret for unified training workflows
+install.packages("caret")
+
+# Install mlr3 for modern ML workflows
+install.packages("mlr3")
+
+# Install mlr3learners for additional models, including LDA and QDA
+install.packages("mlr3learners")
+
+install.packages("e1071")
+```
+
+
+```{r}
+# Load required libraries
+library(MASS)      # For LDA and QDA
+library(caret)     # For unified training interface
+library(mlr3)      # For modern ML framework
+library(mlr3learners)  # For additional classification learners
+library(MASS)      # For data generation (mvrnorm)
+
+# Generate synthetic data
+set.seed(0)
+n_samples <- 100
+
+# Class 1: y = +1
+mu1 <- c(2, 2)
+cov1 <- matrix(c(1, 0.5, 0.5, 1), nrow = 2)
+X1 <- mvrnorm(n_samples, mu1, cov1)
+y1 <- rep(1, n_samples)
+
+# Class -1: y = -1
+mu2 <- c(-2, -2)
+cov2 <- matrix(c(1, -0.5, -0.5, 1), nrow = 2)
+X2 <- mvrnorm(n_samples, mu2, cov2)
+y2 <- rep(-1, n_samples)
+
+# Combine data
+X <- rbind(X1, X2)
+y <- factor(c(y1, y2))  # Convert to factor for classification
+
+# Test data
+X_test <- rbind(
+  c(1, 1),   # Close to class +1
+  c(-1, -1), # Close to class -1
+  c(0, 0)    # Near decision boundary
+)
+
+### 1. MASS Library: LDA and QDA --------------------------------------
+cat("\n--- MASS: LDA ---\n")
+lda_model <- lda(X, grouping = y)  # Train LDA model
+lda_predictions <- predict(lda_model, X_test)$class  # Predict classes
+print(lda_model)
+print("LDA Predictions:")
+print(lda_predictions)
+
+cat("\n--- MASS: QDA ---\n")
+qda_model <- qda(X, grouping = y)  # Train QDA model
+qda_predictions <- predict(qda_model, X_test)$class  # Predict classes
+print(qda_model)
+print("QDA Predictions:")
+print(qda_predictions)
+
+### 2. caret Library: LDA and QDA -------------------------------------
+cat("\n--- caret: LDA ---\n")
+lda_caret <- train(X, y, method = "lda", trControl = trainControl(method = "none"))  # Train LDA with caret
+caret_lda_predictions <- predict(lda_caret, X_test)  # Predict classes
+print("caret LDA Predictions:")
+print(caret_lda_predictions)
+
+cat("\n--- caret: QDA ---\n")
+qda_caret <- train(X, y, method = "qda", trControl = trainControl(method = "none"))  # Train QDA with caret
+caret_qda_predictions <- predict(qda_caret, X_test)  # Predict classes
+print("caret QDA Predictions:")
+print(caret_qda_predictions)
+
+### 3. mlr3 Library: LDA and QDA --------------------------------------
+cat("\n--- mlr3: LDA ---\n")
+# Create a task
+task <- TaskClassif$new("gaussian_task", backend = data.frame(X1 = X[, 1], X2 = X[, 2], y = y), target = "y")
+
+# Train LDA with mlr3
+lda_learner <- lrn("classif.lda")
+lda_learner$train(task)
+mlr3_lda_predictions <- lda_learner$predict_newdata(data.frame(X1 = X_test[, 1], X2 = X_test[, 2]))
+print("mlr3 LDA Predictions:")
+print(mlr3_lda_predictions$response)
+
+cat("\n--- mlr3: QDA ---\n")
+# Train QDA with mlr3
+qda_learner <- lrn("classif.qda")
+qda_learner$train(task)
+mlr3_qda_predictions <- qda_learner$predict_newdata(data.frame(X1 = X_test[, 1], X2 = X_test[, 2]))
+print("mlr3 QDA Predictions:")
+print(mlr3_qda_predictions$response)
+
+```
+
