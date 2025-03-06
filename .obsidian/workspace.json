@@ -193,6 +193,8 @@
   },
   "active": "0fecdc7ab76f706c",
   "lastOpenFiles": [
+    "src/__pycache__/calendarplot.cpython-312.pyc",
+    "src/calendarplot.py",
     "output/studies.md",
     "assets/1/t1.md",
     "assets/1/1M_1.png",
@@ -237,7 +239,6 @@
     "tests/test_analysis.py",
     "tests",
     "src/__pycache__/analysis.cpython-312.pyc",
-    "src/analysis.py",
     "system.canvas"
   ]
 }

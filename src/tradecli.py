@@ -49,7 +49,6 @@ class Tag:
 class Trade:
     uid: str
     tags: List[Tag] = field(default_factory=list)
-    execution_type: str = "actual"  # Add this line to differentiate between actual and ideal trades
 
     def get_tags_dict(self) -> Dict[str, any]:
         return {tag.key: tag.value for tag in self.tags}
@@ -127,9 +126,10 @@ class TradeJournal:
             unique_values = df[col].dropna().unique()
             if set(unique_values).issubset({True, False}):
                 logging.debug(f"Converting column {col} to boolean")
-                df[col] = df[col].astype(bool)
-
-        # Convert categorical columns
+                #df[col] = df[col].astype(bool)  
+                df[col] = df[col].astype('boolean')
+            
+      # Convert categorical columns
         categorical_tags = self.get_all_categorical_tags()
         for col in categorical_tags:
             if col in df.columns:

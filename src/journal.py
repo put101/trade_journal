@@ -38,15 +38,38 @@ class PA:
     def ALL_TAGS():
         return [PA.type_1_(tf) for tf in TF.ALL_TAGS] + [PA.type_2_(tf) for tf in TF.ALL_TAGS] + [PA.type_3_(tf) for tf in TF.ALL_TAGS]
     
+    
+    def used_tags_in(trade: Trade, explicit_search=False) -> list[str]:
+        if explicit_search:
+            return [t.key for t in trade.tags if t.key in PA.ALL_TAGS]
+        if not explicit_search:
+            return [t.key for t in trade.tags if t.key.startswith("type_1_") or t.key.startswith("type_2_") or t.key.startswith("type_3_")]
+        
+    
+    def used_tags_in_df(df: pd.DataFrame, explicit_search=False) -> list[str]:
+        if explicit_search:
+            return [col for col in df.columns if col in PA.ALL_TAGS]
+        if not explicit_search:
+            return [col for col in df.columns if col.startswith("type_1_") or col.startswith("type_2_") or col.startswith("type_3_")]
+    
+    def used_tags_in_df_not_null(df: pd.DataFrame, explicit_search=False) -> list[str]:
+        return [col for col in PA.used_tags_in_df(df, explicit_search) if df[col].any()]
+    
+    
     def has_PA_tags(trade: Trade) -> bool:
         return any(t for t in trade.tags if t.key in PA.ALL_TAGS)
 
-    def add_tags(trade:Trade, pas:list[str]):
-        for pa in PA.ALL_TAGS():
-            if pa in pas:
+    def add_tags(trade:Trade, pas:list[str], add_default:bool = False):
+        if add_default:
+            for pa in PA.ALL_TAGS():
+                if pa in pas:
+                    trade.add_tag(pa, True)
+                else:
+                    trade.add_tag(pa, False)
+        if not add_default:
+            for pa in pas:
                 trade.add_tag(pa, True)
-            else:
-                trade.add_tag(pa, False)
+                # else its implicitly None
 
     def add_tags_to_df(df: pd.DataFrame):
         # Add additional features/tags
@@ -381,6 +404,9 @@ confidence_levels = [1, 2, 3, 4, 5]
 management_strategies = [RiskManagement.NO_MANAGEMENT, RiskManagement.BE_AFTER_1R, RiskManagement.BE_AFTER_PUSH, RiskManagement.CLOSE_EARLY]
 timeframes = TF.ALL_TAGS
 
+
+USE_TEST_DATA = True
+
 logging.info("Adding more trades to the journal")
 # Add more entries to the journal using a loop with random choices
 for i in range(5, 15):
@@ -390,7 +416,10 @@ for i in range(5, 15):
     t.add_tag(random.choice([PA.type_3_(tf) for tf in timeframes]), True)
     t.add_tag("unit_test", True)  # Add unit_test tag
     Account.add_account_to_trade(t, "test_account")  # Add account tag
-    j.add_trade(t)
+    
+    if USE_TEST_DATA:
+        j.add_trade(t)
+    
     entry_price = round(1.1000 + random.uniform(0.01, 0.05), 4)
     # long and short trades, with possible SL and TP    
     is_long = random.choice([True, False])
@@ -483,6 +512,9 @@ j.add_trade(t4)
 
 logging.info("Adding default tags to all trades")
 # add defaults to all trades or certain tags that should not be None
+
+DF_PRE = j.to_dataframe().copy()
+
 for trade in j.trades:
     Sessions.add_tags_to_trade(trade)
     RR.add_tags_to_trade(trade)
@@ -490,13 +522,16 @@ for trade in j.trades:
     # DEFAULTS
     RiskManagement.add_tags_to_trade(trade, RiskManagement.NO_MANAGEMENT)
     # set False for the PA tags that are not set
+    
     for tag in PA.ALL_TAGS():
         if not trade.has_tag(tag):
-            trade.add_tag(tag, False)
-
+            # trade.add_tag(tag, False)
+            pass
 
 def get_full_df():
     return j.to_dataframe().copy()
+
+POST_DF = get_full_df().copy()
 
 get_number_of_trades = lambda df: len(df)
 get_set_of_tags = lambda df: frozenset([tag for tag in df.columns if tag != "uid"])
