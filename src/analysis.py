@@ -371,7 +371,45 @@ def plot_column_distributions(df: pd.DataFrame, columns: list, figsize=(15, 5)):
         ax.set_title(f"Distribution of {col}")
         ax.set_xlabel(col)
         ax.set_ylabel("Count")
+        ax.set_xticks(ax.get_xticks())
         ax.set_xticklabels(ax.get_xticklabels(), rotation=45)
     
     plt.tight_layout()
     plt.show()
+
+
+def plot_feature_distributions(df: pd.DataFrame, features: list, cell_size=3):
+    # Create a grid of subplots
+    n_features = len(features)
+    n_cols = 3  # You can adjust this number
+    n_rows = (n_features + n_cols - 1) // n_cols
+
+
+    size_per_cell = cell_size
+    fs = (n_cols * size_per_cell, n_rows * size_per_cell)
+    
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=fs)
+
+    # Flatten the axes array for easier indexing
+    axes = axes.flatten()
+    
+    for i, feature in enumerate(features):
+        sns.histplot(df[feature].astype(str), ax=axes[i])
+        axes[i].set_title(feature)
+
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_hist_all_values_col(df: pd.DataFrame, col:str):
+    df[col].value_counts(dropna=False).plot(kind='bar')
+    plt.title(col)
+    plt.show()
+    print(df[col].value_counts(dropna=False))
+    
+def get_trades_col_nan(df: pd.DataFrame, col:str):
+    """
+    Get trade_uids for the NaN values of certain column
+    """
+
+    return df[df[col].isna()]['trade_uid']

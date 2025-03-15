@@ -46,9 +46,21 @@
               "icon": "lucide-file",
               "title": "4"
             }
+          },
+          {
+            "id": "4c0bbd53802bdbb3",
+            "type": "leaf",
+            "state": {
+              "type": "release-notes",
+              "state": {
+                "currentVersion": "1.8.9"
+              },
+              "icon": "lucide-book-up",
+              "title": "Release Notes 1.8.9"
+            }
           }
         ],
-        "currentTab": 2
+        "currentTab": 3
       }
     ],
     "direction": "vertical"
@@ -191,8 +203,16 @@
       "obsidian-excalidraw-plugin:Create new drawing": false
     }
   },
-  "active": "0fecdc7ab76f706c",
+  "active": "4c0bbd53802bdbb3",
   "lastOpenFiles": [
+    "src/simulation.py",
+    "src/__pycache__/features.cpython-312.pyc",
+    "src/features.py",
+    "analysis_test.ipynb",
+    "analysis copy.ipynb",
+    "src/__pycache__/analysis.cpython-313.pyc",
+    "src/__pycache__/__init__.cpython-313.pyc",
+    "tests/__pycache__/test_analysis.cpython-313.pyc",
     "src/__pycache__/calendarplot.cpython-312.pyc",
     "src/calendarplot.py",
     "output/studies.md",
@@ -215,7 +235,6 @@
     "Excalidraw/Scripts/Downloaded/Auto Layout.md",
     "Excalidraw/Scripts/Downloaded/Fixed spacing.md",
     "Excalidraw/Scripts/Downloaded",
-    "Excalidraw/Scripts",
     "system_overview.md",
     "output/index.md",
     "output/trade_1014.md",
@@ -232,13 +251,6 @@
     "output/trade_1006.md",
     "output/trade_1002.md",
     "output/trade_1003.md",
-    "output",
-    "tests/__pycache__/test_analysis.cpython-312.pyc",
-    "tests/__pycache__",
-    "src/test_analysis.py",
-    "tests/test_analysis.py",
-    "tests",
-    "src/__pycache__/analysis.cpython-312.pyc",
     "system.canvas"
   ]
 }

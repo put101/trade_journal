@@ -5,3 +5,6 @@
 
 assets/*
 !assets/*/*.md
+
+# all python cache files in all subdirectories
+**/__pycache__/*
