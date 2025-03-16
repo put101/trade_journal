@@ -1,3 +1,15 @@
+# src/features.py
+""" 
+This file is used to define the features that are used in the journal.
+
+Each feature is defined as a class that has a set of tags or features, which is used interchangeably.
+
+The features are used to create a feature dataframe, which is used to train the model and trading analyis.
+
+
+
+"""
+
 from datetime import datetime
 import logging
 import random
@@ -9,6 +21,9 @@ from src.tradecli import Trade
 
 logging.basicConfig(level=logging.INFO)
 
+from typing import Type
+from abc import ABC, abstractmethod
+    
 class TF:    
     m1="m1"
     m5="m5"
@@ -75,17 +90,23 @@ class PA:
         logging.info(f"Added PA tags to DataFrame. Columns: {df.columns}")
 
 class Confidence:
-    TAG_CONFIDENCE = "confidence"
-    TAG_NUMERICAL_CONFIDENCE = "numerical_confidence"
+
+    TAG_ORDINAL_CONFIDENCE = "numerical_confidence"
     DEFAULT_CONFIDENCE = None
     LEVELS = [1, 2, 3, 4, 5]
+
+    @staticmethod
+    def ALL_TAGS():
+        return [Confidence.TAG_ORDINAL_CONFIDENCE] + [f"confidence_{level}" for level in Confidence.LEVELS]
     
     @staticmethod
     def add_tags_to_trade(trade: Trade, confidence: int):
         assert confidence in Confidence.LEVELS
-        trade.add_tag(Confidence.TAG_NUMERICAL_CONFIDENCE, confidence)
+        trade.add_tag(Confidence.TAG_ORDINAL_CONFIDENCE, confidence)
     
-    IGNORED_TAGS = [TAG_NUMERICAL_CONFIDENCE] + [f"confidence_{level}" for level in LEVELS]
+    
+    
+    IGNORED_TAGS = [TAG_ORDINAL_CONFIDENCE] + [f"confidence_{level}" for level in LEVELS]
     CATEGORICAL_TAGS = []
 
 class MultiTimeframeAnalysis:
@@ -544,200 +565,27 @@ def get_all_categorical_tags() -> List[str]:
     classes = [Confidence, MultiTimeframeAnalysis, RiskManagement, Outcome]
     for cls in classes:
         categorical_tags.extend(cls.CATEGORICAL_TAGS)
-    return categorical_tags
+    return categorical_tags 
 
-@dataclass
-class PositionModification:
-    """Represents a modification to a position (size change, price levels change, etc.)"""
-    timestamp: datetime
-    price: float  # Price at modification time
-    old_lot_size: float
-    new_lot_size: float
-    old_sl: Optional[float] = None
-    new_sl: Optional[float] = None
-    old_tp: Optional[float] = None
-    new_tp: Optional[float] = None
-    pnl: Optional[float] = None  # PnL realized if this was a size reduction
+def all_feature_classes() -> List[Type[Feature]]:
+    return [Confidence, MultiTimeframeAnalysis, RiskManagement, Outcome, TradePosition, InitialReward, PotentialReward, EntryTime, Sessions, RR]
 
-@dataclass
-class ModifiablePosition:
-    """A single position that can be modified over time (like in cTrader)"""
-    TAG_INITIAL_ENTRY = "initial_entry"
-    TAG_CURRENT_SIZE = "current_size"
-    TAG_CURRENT_AVG_PRICE = "current_avg_price"
-    TAG_CURRENT_SL = "current_sl"
-    TAG_CURRENT_TP = "current_tp"
-    TAG_SIDE = "side"
-    TAG_MODIFICATIONS = "modifications"
-    TAG_REALIZED_PNL = "realized_pnl"
-    TAG_UNREALIZED_PNL = "unrealized_pnl"
-    
-    # Initial position state
-    entry_time: datetime
-    side: str  # "long" or "short"
-    initial_price: float
-    initial_lot_size: float
-    initial_sl: float
-    initial_tp: Optional[float] = None
-    
-    # Current position state
-    current_lot_size: float = field(init=False)
-    current_avg_price: float = field(init=False)
-    current_sl: float = field(init=False)
-    current_tp: Optional[float] = field(init=False)
-    
-    # History of modifications
-    modifications: List[PositionModification] = field(default_factory=list)
-    
-    def __post_init__(self):
-        """Initialize current state with initial values"""
-        if self.side not in ["long", "short"]:
-            raise ValueError("Side must be 'long' or 'short'")
-        self.current_lot_size = self.initial_lot_size
-        self.current_avg_price = self.initial_price
-        self.current_sl = self.initial_sl
-        self.current_tp = self.initial_tp
-    
-    def modify_size(self, timestamp: datetime, price: float, new_lot_size: float) -> None:
-        """Modify position size (scale in/out) at given price"""
-        if new_lot_size < 0:
-            raise ValueError("New lot size cannot be negative")
-            
-        if new_lot_size > self.current_lot_size:
-            # Scaling in - adjust average price
-            additional_size = new_lot_size - self.current_lot_size
-            self.current_avg_price = (
-                (self.current_avg_price * self.current_lot_size + price * additional_size)
-                / new_lot_size
-            )
-        elif new_lot_size < self.current_lot_size:
-            # Scaling out - calculate realized PnL
-            reduced_size = self.current_lot_size - new_lot_size
-            pnl = self._calculate_pnl(price, reduced_size)
-        else:
-            # No change
-            return
-            
-        mod = PositionModification(
-            timestamp=timestamp,
-            price=price,
-            old_lot_size=self.current_lot_size,
-            new_lot_size=new_lot_size,
-            old_sl=self.current_sl,
-            new_sl=self.current_sl,
-            old_tp=self.current_tp,
-            new_tp=self.current_tp,
-            pnl=pnl if new_lot_size < self.current_lot_size else None
-        )
-        self.modifications.append(mod)
-        self.current_lot_size = new_lot_size
-    
-    def modify_sl(self, timestamp: datetime, new_sl: float) -> None:
-        """Modify stop loss level"""
-        # Validate SL placement based on side
-        if self.side == "long" and new_sl >= self.current_avg_price:
-            raise ValueError("Stop loss must be below entry for long positions")
-        if self.side == "short" and new_sl <= self.current_avg_price:
-            raise ValueError("Stop loss must be above entry for short positions")
-            
-        mod = PositionModification(
-            timestamp=timestamp,
-            price=self.current_avg_price,  # Use avg price as no actual execution
-            old_lot_size=self.current_lot_size,
-            new_lot_size=self.current_lot_size,
-            old_sl=self.current_sl,
-            new_sl=new_sl,
-            old_tp=self.current_tp,
-            new_tp=self.current_tp
-        )
-        self.modifications.append(mod)
-        self.current_sl = new_sl
-    
-    def modify_tp(self, timestamp: datetime, new_tp: Optional[float]) -> None:
-        """Modify take profit level"""
-        if new_tp is not None:
-            # Validate TP placement based on side
-            if self.side == "long" and new_tp <= self.current_avg_price:
-                raise ValueError("Take profit must be above entry for long positions")
-            if self.side == "short" and new_tp >= self.current_avg_price:
-                raise ValueError("Take profit must be below entry for short positions")
-                
-        mod = PositionModification(
-            timestamp=timestamp,
-            price=self.current_avg_price,  # Use avg price as no actual execution
-            old_lot_size=self.current_lot_size,
-            new_lot_size=self.current_lot_size,
-            old_sl=self.current_sl,
-            new_sl=self.current_sl,
-            old_tp=self.current_tp,
-            new_tp=new_tp
-        )
-        self.modifications.append(mod)
-        self.current_tp = new_tp
-    
-    def _calculate_pnl(self, price: float, lot_size: float) -> float:
-        """Calculate PnL for a given price and lot size"""
-        multiplier = 1 if self.side == "long" else -1
-        return (price - self.current_avg_price) * lot_size * multiplier
-    
-    def get_realized_pnl(self) -> float:
-        """Get total realized PnL from all modifications"""
-        return sum(mod.pnl or 0 for mod in self.modifications)
-    
-    def get_unrealized_pnl(self, current_price: float) -> float:
-        """Calculate unrealized PnL at current price"""
-        return self._calculate_pnl(current_price, self.current_lot_size)
-    
-    def get_risk_reward(self) -> Optional[float]:
-        """Calculate current risk/reward ratio"""
-        if not self.current_tp:
-            return None
-        risk = abs(self.current_avg_price - self.current_sl)
-        reward = abs(self.current_tp - self.current_avg_price)
-        return reward / risk if risk != 0 else None
-    
-    def add_tags_to_trade(self, trade: Trade, current_price: Optional[float] = None) -> None:
-        """Add position information as tags to the trade"""
-        # Initial state
-        trade.add_tag(self.TAG_INITIAL_ENTRY, {
-            "time": self.entry_time.isoformat(),
-            "side": self.side,
-            "price": self.initial_price,
-            "lot_size": self.initial_lot_size,
-            "sl": self.initial_sl,
-            "tp": self.initial_tp
-        })
-        
-        # Current state
-        trade.add_tag(self.TAG_CURRENT_SIZE, self.current_lot_size)
-        trade.add_tag(self.TAG_CURRENT_AVG_PRICE, self.current_avg_price)
-        trade.add_tag(self.TAG_CURRENT_SL, self.current_sl)
-        if self.current_tp:
-            trade.add_tag(self.TAG_CURRENT_TP, self.current_tp)
-        trade.add_tag(self.TAG_SIDE, self.side)
-        
-        # Modifications history
-        mods_data = [
-            {
-                "time": mod.timestamp.isoformat(),
-                "price": mod.price,
-                "old_size": mod.old_lot_size,
-                "new_size": mod.new_lot_size,
-                "old_sl": mod.old_sl,
-                "new_sl": mod.new_sl,
-                "old_tp": mod.old_tp,
-                "new_tp": mod.new_tp,
-                "realized_pnl": mod.pnl
-            }
-            for mod in self.modifications
-        ]
-        trade.add_tag(self.TAG_MODIFICATIONS, mods_data)
-        
-        # PnL information
-        trade.add_tag(self.TAG_REALIZED_PNL, self.get_realized_pnl())
-        if current_price:
-            trade.add_tag(self.TAG_UNREALIZED_PNL, self.get_unrealized_pnl(current_price))
-    
-    IGNORED_TAGS = [TAG_INITIAL_ENTRY, TAG_CURRENT_SIZE, TAG_CURRENT_AVG_PRICE,
-                   TAG_CURRENT_SL, TAG_CURRENT_TP, TAG_SIDE, TAG_MODIFICATIONS,
-                   TAG_REALIZED_PNL, TAG_UNREALIZED_PNL] 
+def used_feature_classes(df: pd.DataFrame) -> List[Type[Feature]]:
+    used_classes = []
+    for col in df.columns:
+        for cls in all_feature_classes():
+            for tag in cls.ALL_TAGS:
+                if tag in col:
+                    logging.info(f"Found class {cls.__name__} via feature {tag} in column {col}")
+                    used_classes.append(cls)
+    return used_classes
+
+def used_feature_tags(df: pd.DataFrame) -> List[str]:
+    used_tags = []
+    for col in df.columns:
+        for cls in all_feature_classes():
+            for tag in cls.ALL_TAGS:
+                if tag in col:
+                    logging.info(f"Found tag {tag} in column {col}")
+                    used_tags.append(tag)
+    return used_tags

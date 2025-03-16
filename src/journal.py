@@ -1,3 +1,13 @@
+# src/journal.py
+"""
+This file is used to define some rudimentray functions for test data and also the actual journal with real data.
+
+The main goal is to use the features.py file to define features step by step for each trade and then do little to no changes afterwards, besides maybe adding 
+new features afterwards. The trades are then stored in a journal, which is simply a list of trades.
+The journal supports going over all the trades and creating a feature dataframe for further analysis.
+
+"""
+
 from datetime import datetime
 import markdown
 import os
