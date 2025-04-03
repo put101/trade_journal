@@ -9,7 +9,7 @@ import matplotlib.dates as mdates
 import calendar
 import numpy as np
 from matplotlib.patches import Rectangle
-import logging
+
 
 import journal as jr
 
@@ -32,17 +32,7 @@ def get_return_series(df, col='return_points'):
     """
     Get the return series from a trade dataframe.
     """
-    
-    time_col = 'entry_time'
-    
-    # Check for missing timestamps
-    if df['entry_time'].isnull().any():
-        logging.warn(f"Some '{time_col}' values are missing. Rows with missing timestamps will be dropped.")
-    
-    # Drop rows with missing timestamps
-    df = df.dropna(subset=[time_col])
-    
-    s = df.set_index(time_col)[col]
+    s = df.set_index('entry_time')[col]
     s.sort_index(inplace=True)
     return s
 

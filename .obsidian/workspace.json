@@ -11,17 +11,30 @@
             "id": "6a72ed160edac576",
             "type": "leaf",
             "state": {
+              "type": "image",
+              "state": {
+                "file": "assets/6/IMG_3602.PNG"
+              },
+              "icon": "lucide-image",
+              "title": "IMG_3602"
+            }
+          },
+          {
+            "id": "617d6b514e1682cd",
+            "type": "leaf",
+            "state": {
               "type": "markdown",
               "state": {
-                "file": "assets/template/t-{id}.md",
+                "file": "assets/6/t-{6}.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "t-{id}"
+              "title": "t-{6}"
             }
           }
-        ]
+        ],
+        "currentTab": 1
       }
     ],
     "direction": "vertical"
@@ -164,36 +177,43 @@
       "obsidian-excalidraw-plugin:Create new drawing": false
     }
   },
-  "active": "6a72ed160edac576",
+  "active": "617d6b514e1682cd",
   "lastOpenFiles": [
-    "assets/5/t-5.md",
+    "src/__pycache__/strategy.cpython-312.pyc",
+    "src/strategy.py",
+    "assets/_/IMG_4644.PNG",
+    "assets/_/IMG_4643.PNG",
+    "assets/_/IMG_4642.PNG",
+    "assets/_/IMG_4638.PNG",
+    "assets/_/IMG_4637.PNG",
+    "assets/_/IMG_4635.PNG",
+    "assets/_/IMG_4633.PNG",
+    "assets/_/IMG_4630.PNG",
+    "assets/_/IMG_4629.PNG",
+    "assets/_/IMG_4628.PNG",
+    "assets/_",
+    "assets/?",
+    "assets/untitled folder",
+    "assets/8/t-8.md",
+    "assets/8/t-{id}.md",
+    "assets/8",
+    "assets/template copy/t-{id}.md",
+    "assets/template copy",
+    "tests/__pycache__/test_trade.cpython-312-pytest-8.3.4.pyc",
+    "tests/__pycache__/test_generate_test_data.cpython-312.pyc",
+    "tests/__pycache__/test_journal.cpython-312.pyc",
+    "tests/__pycache__/test_journal.cpython-313.pyc",
+    "assets/7/t-{id}.md",
+    "assets/7/t-7.md",
+    "assets/6/t-{6}.md",
     "assets/template/t-{id}.md",
-    "assets/template",
-    "assets/5/Pasted image 20250315165818.png",
+    "assets/5/t-5.md",
     "Trade Journal Main.md",
     "assets/5/Untitled 1.md",
     "Excalidraw/Drawing.excalidraw.md",
     "assets/4/4.md",
-    "assets/5",
-    "Untitled",
-    "src/simulation.py",
-    "src/__pycache__/features.cpython-312.pyc",
-    "src/features.py",
-    "analysis_test.ipynb",
-    "analysis copy.ipynb",
-    "src/__pycache__/analysis.cpython-313.pyc",
-    "src/__pycache__/__init__.cpython-313.pyc",
     "output/studies.md",
     "assets/1/t1.md",
-    "assets/1/1M_1.png",
-    "assets/1/w1_1.png",
-    "assets/1/d1_1.png",
-    "assets/1/h4_2.png",
-    "assets/1/h4_1.png",
-    "assets/1/h1_2.png",
-    "assets/1/Pasted image 20250125213344.png",
-    "assets/1/m5_2.png",
-    "assets/1/m30_1.png",
     "Excalidraw/Scripts/Downloaded/Mindmap format.md",
     "Excalidraw/Scripts/Downloaded/Fixed vertical distance.md",
     "Excalidraw/Scripts/Downloaded/Connect elements.md",
@@ -205,13 +225,6 @@
     "output/trade_1013.md",
     "output/trade_1012.md",
     "output/trade_1011.md",
-    "output/trade_1010.md",
-    "output/trade_1008.md",
-    "output/trade_1005.md",
-    "output/trade_1004.md",
-    "output/trade_1001.md",
-    "output/trade_1009.md",
-    "output/trade_1007.md",
     "system.canvas"
   ]
 }

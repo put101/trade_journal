@@ -8,7 +8,7 @@ The journal supports going over all the trades and creating a feature dataframe 
 
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 import markdown
 import os
 import random
@@ -17,101 +17,23 @@ import re  # Add regex module for pattern matching
 import scipy
 from src.tradecli import * 
 from src.features import *
+from src.generate_test_data import get_test_data_journal
+from trade import *
 
 logging.basicConfig(level=logging.INFO)
 
+# TRADING ACCOUNTS
+ACC_IDEAL = "ideal"
+ACC_MT5_VANTAGE = "mt5_vantage"
+ACC_TEST = "test_account"
+
+# TIMEFRAMES
+TYPE_3_M15 = PA.type_3_(TF.m15)
 
 j = TradeJournal()
 j.get_all_categorical_tags = get_all_categorical_tags
 j.get_all_ignored_tags = get_all_ignored_tags
 
-### TEST DATA START
-
-# Define distributions for different tags
-confidence_levels = [1, 2, 3, 4, 5]
-management_strategies = [RiskManagement.NO_MANAGEMENT, RiskManagement.BE_AFTER_1R, RiskManagement.BE_AFTER_PUSH, RiskManagement.CLOSE_EARLY]
-timeframes = TF.ALL_TAGS
-
-
-USE_TEST_DATA = True
-
-logging.info("Adding more trades to the journal")
-# Add more entries to the journal using a loop with random choices
-for i in range(5, 15):
-    t = Trade(uid=str(1000+i))
-    t.add_tag(random.choice([PA.type_1_(tf) for tf in timeframes]), True)
-    t.add_tag(random.choice([PA.type_2_(tf) for tf in timeframes]), True)
-    t.add_tag(random.choice([PA.type_3_(tf) for tf in timeframes]), True)
-    t.add_tag("unit_test", True)  # Add unit_test tag
-    Account.add_account_to_trade(t, "test_account")  # Add account tag
-    
-    if USE_TEST_DATA:
-        j.add_trade(t)
-    
-    entry_price = round(1.1000 + random.uniform(0.01, 0.05), 4)
-    # long and short trades, with possible SL and TP    
-    is_long = random.choice([True, False])
-    rr = random.uniform(1, 10.0)
-    WR = 0.7
-    SL_POINTS = 0.005
-    SL_POINTS_VARIANCE = 0.001
-    is_win = random.choices([True, False], weights=[WR, 1-WR], k=1)[0]
-    
-    
-    if is_win:
-        actual_rr = random.uniform(0, 10.0)
-    else:
-        actual_rr = random.uniform(-1.50, 0)
-        
-    actual_rr = round(actual_rr, 2)
-    
-    
-    if is_long:
-        entry_price = round(entry_price, 4)
-        sl_price = entry_price - SL_POINTS
-        tp_price = entry_price + SL_POINTS * rr
-        close_price = entry_price + SL_POINTS * actual_rr
-    else:
-        entry_price = round(entry_price, 4)
-        sl_price = entry_price + SL_POINTS
-        tp_price = entry_price - SL_POINTS * rr
-        close_price = entry_price - SL_POINTS * actual_rr
-    
-    position = TradePosition(entry_price=entry_price, sl_price=sl_price, tp_price=tp_price, close_price=close_price)
-    position.add_tags_to_trade(t)
-    # choose random entry timestamp date, hour, minue within the last 30 days from now
-    # the date should around each working day of the week
-    # the hour should be normally distributed around 09:00 GMT+2, tz="Europe/Berlin"
-    # the minute should be normally distributed around 00, 15, 30, 45
-    hour = scipy.stats.truncnorm.rvs(-1, 1, loc=9, scale=1)
-    minute = random.choice([0, 15, 30, 45])
-    minute = scipy.stats.truncnorm.rvs(-1, 1, loc=minute, scale=15) # Normally distributed around 0, 15, 30, 45
-    entry_time = pd.Timestamp.now() + pd.Timedelta(days=random.randint(-30, 0), hours=hour, minutes=minute)
-    # convert the timestamp 
-    EntryTime(entry_time=entry_time).add_tags_to_trade(t)
-    #EntryTime(entry_time=datetime.now()).add_tags_to_trade(t)
-    RR.add_tags_to_trade(t)
-    Outcome.add_tags_to_trade(t)
-    MultiTimeframeAnalysis.add_tags_to_trade(t, random.choice([True, False]))
-    Confidence.add_tags_to_trade(t, random.choice(confidence_levels))  # Ensure confidence is added    
-    RiskManagement.add_tags_to_trade(t, random.choice(management_strategies))
-
-## TEST DATA END
-
-def create_ideal_trade(uid: str, entry_price: float, sl_price: float, tp_price: float, close_price: Optional[float] = None) -> Trade:
-    trade = Trade(uid=uid, execution_type="ideal")
-    position = TradePosition(entry_price=entry_price, sl_price=sl_price, tp_price=tp_price, close_price=close_price)
-    position.add_tags_to_trade(trade)
-    EntryTime(entry_time=datetime.now()).add_tags_to_trade(trade)
-    RR.add_tags_to_trade(trade)
-    Outcome.add_tags_to_trade(trade)
-    MultiTimeframeAnalysis.add_tags_to_trade(trade, random.choice([True, False]))
-    Confidence.add_tags_to_trade(trade, random.choice(confidence_levels))
-    RiskManagement.add_tags_to_trade(trade, RiskManagement.NO_MANAGEMENT)
-    return trade
-
-# Example of tracking one setup with actual account execution and ideal execution
-logging.info("Creating example trades for actual and ideal executions")
 
 
 t1 = None #TODO
@@ -138,6 +60,20 @@ PA.add_tags(t4, [PA.type_1_(TF.m15), PA.type_1_(TF.m5), PA.type_3_(TF.m1)])
 j.add_trade(t4)
 
 
+"""
+pos.market_entry(83091.31, 
+                pd.Timestamp('2025-03-17 14:17:00'), # my time 
+                Trade., 
+                sl_price=83249.60,
+                tp_price=71500.00,
+                lot_size=0.1,
+                sl_risk=14.52).close_position(82803.0, pd.Timestamp('2025-03-17 14:34:00'), )
+"""
+t5 = Trade(uid="5")
+t = Execution(83091.31, '2025-03-17 14:17:00', 83249.60, 71500.00, 0.1, 'sell', 14.52)
+j.add_trade(t5)
+
+
 logging.info("Adding default tags to all trades")
 # add defaults to all trades or certain tags that should not be None
 
@@ -160,12 +96,3 @@ def get_full_df():
     return j.to_dataframe().copy()
 
 POST_DF = get_full_df().copy()
-
-get_number_of_trades = lambda df: len(df)
-get_set_of_tags = lambda df: frozenset([tag for tag in df.columns if tag != "uid"])
-get_number_of_tags = lambda df: len(get_set_of_tags(df))
-get_number_of_trades_with_tag = lambda df, tag: len(df[df[tag].notnull()])
-
-
-# debug
-print(t4)

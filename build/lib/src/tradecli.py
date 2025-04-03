@@ -347,53 +347,40 @@ class TradeJournal:
         with open(index_path, 'w') as index_file:
             index_file.write("\n".join(lines))
 
-    
-    def get_files_for_trades(self, p: pathlib.Path) -> Dict[str, List[str]]:
-        """Files are structured arbitrarily by the user. 
-        Assets need to be below the ASSETS_PATH folder in any structure and files are attributed in named-sorted order
-        to the trade ID if found somewhere in a file's path. This enables the user to structure and name the assets as they like. 
-        """
-        import glob
-        files = {}
-
-        # Get the assets path as a string for easier manipulation
-        assets_path_str = str(self.ASSETS_PATH)
-
-        for trade in self.trades:
-            trade_id = trade.uid
-            files[trade_id] = []
-            
-            # Use glob to find all files in the specified path
-            for asset in glob.glob(os.path.join(p, '**', '*'), recursive=True):
-                # Check if the asset path contains the assets path and the trade_id after it
-                if assets_path_str in asset:
-                    # Get the part of the path after the assets path
-                    relative_path = asset.split(assets_path_str, 1)[-1]
-                    # Check if the trade_id is a standalone segment in the relative path
-                    if f"/{trade_id}/" in relative_path or f"\\{trade_id}\\" in relative_path or relative_path.endswith(f"{trade_id}"):
-                        files[trade_id].append(asset)
-            
-            # Sort the files by name
-            files[trade_id].sort()
-
-        logging.info("Files for trades found")
-        logging.info(f"Files Found #: {len(files)}, Total Trades #: {len(self.trades)}"
-                     + f" max files for trade: {max([len(files[trade.uid]) for trade in self.trades])}"
-                     + f" min files for trade: {min([len(files[trade.uid]) for trade in self.trades])}"
-                     + f" avg files for trade: {sum([len(files[trade.uid]) for trade in self.trades]) / len(self.trades)}")
-        
-        # Descriptive statistics using pandas
-        file_stats = pd.DataFrame([len(files[trade.uid]) for trade in self.trades])
-        logging.info(f"Descriptive Statistics: {file_stats.describe()}")
-
-        return files
-    
-    
     def to_markdown(self, output_dir: str, config: Optional[Config] = None, df: Optional[pd.DataFrame] = None):
         logging.info("Converting trades to markdown")
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
 
+        def get_files_for_trades(p: pathlib.Path) -> Dict[str, List[str]]:
+            """Files are structured arbitrarly by the user. 
+            Assets need to be below the ASSETS_PATH folder in any strucutre and files are attributed in named-sorted order
+            to the trade ID if found somewhere in a file's path. This enables the user to structure and name the assets as they like. 
+            """
+            import glob
+            files = {}
+
+            for trade in self.trades:
+                trade_id = trade.uid
+                files[trade_id] = []
+                for asset in glob.glob(os.path.join(p, '**', '*'), recursive=True):
+                    if trade_id in asset:
+                        files[trade_id].append(asset)
+                # sort the files by name
+                files[trade_id].sort()
+
+            logging.info("Files for trades found")
+            logging.info(f"Files Found #: {len(files)}, Total Trades #: {len(self.trades)}"
+                         + f"max files for trade: {max([len(files[trade.uid]) for trade in self.trades])}"
+                         + f"min files for trade: {min([len(files[trade.uid]) for trade in self.trades])}"
+                         + f"avg files for trade: {sum([len(files[trade.uid]) for trade in self.trades]) / len(self.trades)}")
+            # do similar descriptive statistics using pandas
+            # pd.DataFrame([len(files[trade.uid]) for trade in self.trades]).describe()
+            file_stats = pd.DataFrame([len(files[trade.uid])
+                                      for trade in self.trades])
+            logging.info(f"Descriptive Statistics: {file_stats.describe()}")
+
+            return files
 
         assets = get_files_for_trades(self.ASSETS_PATH)
         logging.debug(f"Assets: {assets}")
