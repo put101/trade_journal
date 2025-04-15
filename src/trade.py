@@ -1,268 +1,312 @@
 from datetime import datetime
-from typing import Optional, Dict, List, Union
-from enum import StrEnum
-import pprint
+from typing import Optional, Dict, Any, List, Union
 import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
 
-""" 
-- Designed for retrospective journaling of trades with full lifecycle tracking
-- Models real-world broker position management (e.g. cTrader) using average pricing
-- Tracks multiple entries and partial exits using FIFO logic, maintaining state granularity
-- Stores side (long/short), SL/TP, entry/exit times, and dynamic point value per trade
-- Computes real-time and historical metrics like avg entry, monetary risk, and PnL potential
-- Enables quality-of-life helpers for dynamic SL recalculation, breakeven, and forward profit planning
-- Preserves a rich modification history with timestamped actions for replay and plotting
-- Optimized for analysis, visualization, and risk review workflows during and after trades
-"""
-
-__ALL__ = []
-
-CONST_BUY = "buy"
-CONST_SELL = "sell"
-
-__ALL__ += [CONST_BUY, CONST_SELL]
-
-# Position keys
-KEY_entry_price = "entry_price"
-KEY_exit_price = "exit_price"
-KEY_entry_time = "entry_time"
-KEY_side = "side"
-KEY_exit_time = "exit_time"
-KEY_closed = 'closed'
-KEY_size = 'size'
-KEY_point_value = 'point_value'
-__ALL__.extend([KEY_entry_price, KEY_exit_price, KEY_entry_time, 
-                KEY_side, KEY_exit_time, KEY_closed, KEY_size, KEY_point_value])
-
-# Trade keys
-KEY_sl_price = 'sl_price'
-KEY_tp_price = 'tp_price'
-__ALL__ += [KEY_sl_price, KEY_tp_price]
-
-# Modifications keys
-KEY_action = 'action'
-KEY_time = 'time'
-KEY_closed_size = 'closed_size'
-KEY_remaining_size= 'remaining_size'
-KEY_new_tp = 'new_tp'
-KEY_new_sl = 'new_sl'
-__ALL__.extend([KEY_action, KEY_time, KEY_closed_size, KEY_remaining_size, KEY_new_sl, KEY_new_tp])
-
-KEY_avg_entry_price = 'avg_entry_price'
-KEY_total_size= 'total_size'
-KEY_positions= 'positions'
-KEY_n_positions= 'n_positions'
-KEY_modifications= 'modifications'
-__ALL__.extend([KEY_avg_entry_price, KEY_total_size, KEY_positions, KEY_n_positions, KEY_modifications])
-
-class Position:
-    def __init__(self, entry_price: float, size: float, entry_time: Union[datetime, str], point_value: float, side: str):
-        # Dynamic conversion: if entry_time is a string, convert to Timestamp
-        if isinstance(entry_time, str):
-            entry_time = pd.Timestamp(entry_time)
-        self.entry_price = entry_price
-        self.size = size
-        self.entry_time = entry_time
-        self.point_value = point_value
-        self.side = side
-        self.exit_price: Optional[float] = None
-        self.exit_time: Optional[datetime] = None
-
-    def close(self, exit_price: float, exit_time: Union[datetime, str]):
-        # Convert exit_time if needed
-        if isinstance(exit_time, str):
-            exit_time = pd.Timestamp(exit_time)
-        self.exit_price = exit_price
-        self.exit_time = exit_time
-
-    def is_closed(self):
-        return self.exit_price is not None
-
-    def risk_at_price(self, price: float) -> dict:
-        risk = abs(self.entry_price - price) * self.size * self.point_value
-        return risk 
-
-    def to_dict(self) -> Dict: 
-        return {
-            KEY_entry_price: self.entry_price,
-            KEY_size: self.size,
-            KEY_entry_time: self.entry_time,
-            KEY_side: self.side,
-            KEY_exit_price: self.exit_price,
-            KEY_exit_time: self.exit_time,
-            KEY_closed: self.is_closed(),
-            KEY_point_value: self.point_value,
-        }
-
-class Execution:
-    def __init__(self, entry_price: float, entry_time: Union[datetime, str], sl_price: float, tp_price: float,
-                 size: float, side: str, sl_monetary_value: float, point_value: Optional[float] = None):
-        # Dynamic conversion: if entry_time is a string, convert to Timestamp
-        if isinstance(entry_time, str):
-            entry_time = pd.Timestamp(entry_time)
-            
+class Trade:
+    def __init__(self,
+                 entry_price: float,
+                 size: float,
+                 entry_time: Union[datetime, str],
+                 side: str,
+                 sl_price: float,
+                 tp_price: float,
+                 sl_monetary_value: float,
+                 point_value: Optional[float] = None):
+        """
+        Initialize a trade with an initial position and stop-loss/take-profit.
+        """
+        self.side = side.lower()
+        self.entry_time = pd.Timestamp(entry_time) if isinstance(entry_time, str) else entry_time
+        self.initial_entry_price = entry_price
+        self.avg_entry_price = entry_price
+        self.initial_size = size
+        self.current_size = size
         self.sl_price = sl_price
         self.tp_price = tp_price
-        self.side = side  # long or short
-        self.positions: List[Position] = []
-        self.modifications: List[Dict[str, any]] = []
+        self.exit_time: Optional[datetime] = None
+        self.realized_profit = 0.0
 
+        # Calculate point value if not provided.
         sl_distance = abs(entry_price - sl_price)
         if sl_distance == 0:
             raise ValueError("Stop-loss distance cannot be zero.")
-        
-        if point_value is None:
-            self.point_value = Execution.calc_point_value(sl_monetary_value, sl_distance, size)
-        else:
-            self.point_value = point_value
+        self.point_value = point_value or (abs(sl_monetary_value) / (sl_distance * size))
+        if not (0 < self.point_value < 10_000):
+            raise ValueError("Calculated point value is out of expected range.")
 
-        assert 10_000 > self.point_value > 0         
-
-        initial_position = Position(entry_price, size, entry_time, self.point_value, side)
-        self.positions.append(initial_position)
-
+        self.modifications: List[Dict[str, Any]] = []
         self.modifications.append({
-            KEY_action: "initial_position",
-            KEY_time: entry_time,
-            KEY_entry_price: entry_price,
-            KEY_size: size,
-            KEY_sl_price: sl_price,
-            KEY_tp_price: tp_price,
-            KEY_point_value: self.point_value,
-            KEY_side: side
-        })
-        
-    def __repr__(self) -> str:
-        d = self.get_trade_summary()
-        return pprint.pformat(d)
-    
-    def __str__(self) -> str:
-        return self.get_trade_summary()
-
-    @classmethod
-    def calc_point_value(cls, sl_monetary_value, sl_distance, size):
-        return abs(sl_monetary_value) / (sl_distance * size)
-    
-    def get_sl_for_risk(self, target_risk: float) -> float:
-        avg_price = self.avg_entry_price
-        if self.side == 'long':
-            return avg_price - (target_risk / (self.total_size * self.point_value))
-        else:
-            return avg_price + (target_risk / (self.total_size * self.point_value))
-
-    def potential_profit_at_price(self, target_price: float) -> float:
-        profit = (target_price - self.avg_entry_price) if self.side == 'long' else (self.avg_entry_price - target_price)
-        return profit * self.total_size * self.point_value
-
-    def breakeven_price(self) -> float:
-        return self.avg_entry_price
-
-    @property
-    def total_size(self):
-        return sum(p.size for p in self.positions if not p.is_closed())
-
-    @property
-    def avg_entry_price(self):
-        open_positions = [p for p in self.positions if not p.is_closed()]
-        total_value = sum(p.entry_price * p.size for p in open_positions)
-        total_size = sum(p.size for p in open_positions)
-        return total_value / total_size if total_size else None
-
-    def avg_risk_at_price(self, price: float) -> float:
-        open_positions = [p for p in self.positions if not p.is_closed()]
-        if not open_positions:
-            return 0.0
-        total_risk = sum(p.risk_at_price(price) for p in open_positions)
-        return total_risk / len(open_positions)
-
-    def add_position(self, entry_price: float, size: float, entry_time: Union[datetime, str]):
-        # Convert entry_time if it is a string
-        if isinstance(entry_time, str):
-            entry_time = pd.Timestamp(entry_time)
-        position = Position(entry_price, size, entry_time, self.point_value, self.side)
-        self.positions.append(position)
-        self.modifications.append({
-            KEY_action: "add_position",
-            KEY_time: entry_time,
-            KEY_entry_price: entry_price,
-            KEY_size: size
+            'action': 'initial_trade',
+            'time': self.entry_time,
+            'entry_price': entry_price,
+            'size': size,
+            'sl_price': sl_price,
+            'tp_price': tp_price,
+            'point_value': self.point_value,
+            'side': self.side
         })
 
-    def close_position_fifo(self, size: float, exit_price: float, exit_time: Union[datetime, str]):
-        # Convert exit_time if it is a string
-        if isinstance(exit_time, str):
-            exit_time = pd.Timestamp(exit_time)
-        remaining_size = size
+    def add_position(self,
+                     entry_price: float,
+                     size: float,
+                     entry_time: Union[datetime, str],
+                     sl_price: Optional[float] = None,
+                     tp_price: Optional[float] = None) -> None:
+        entry_time = pd.Timestamp(entry_time) if isinstance(entry_time, str) else entry_time
+        total_cost = self.avg_entry_price * self.current_size + entry_price * size
+        self.current_size += size
+        self.avg_entry_price = total_cost / self.current_size
 
-        for position in self.positions:
-            if position.is_closed():
-                continue
+        if sl_price is not None:
+            self.sl_price = sl_price
+        if tp_price is not None:
+            self.tp_price = tp_price
 
-            if position.size <= remaining_size:
-                remaining_size -= position.size
-                position.close(exit_price, exit_time)
-                self.modifications.append({
-                    KEY_action: "close_position",
-                    KEY_time: exit_time,
-                    KEY_exit_price: exit_price,
-                    KEY_closed_size: position.size
-                })
-            else:
-                closed_position = Position(position.entry_price, remaining_size, position.entry_time, self.point_value, self.side)
-                closed_position.close(exit_price, exit_time)
-                self.positions.append(closed_position)
+        self.modifications.append({
+            'action': 'add_position',
+            'time': entry_time,
+            'entry_price': entry_price,
+            'size': size,
+            'new_sl': sl_price,
+            'new_tp': tp_price
+        })
 
-                position.size -= remaining_size
-                self.modifications.append({
-                    KEY_action: "partial_close",
-                    KEY_time: exit_time,
-                    KEY_exit_price: exit_price,
-                    KEY_remaining_size: remaining_size
-                })
-                remaining_size = 0
+    def close_position(self,
+                       exit_price: float,
+                       exit_time: Union[datetime, str],
+                       size: Optional[float] = None) -> None:
+        exit_time = pd.Timestamp(exit_time) if isinstance(exit_time, str) else exit_time
+        size_to_close = size or self.current_size
+        if size_to_close > self.current_size:
+            raise ValueError("Cannot close more than the current position size.")
+            
+        profit = self._calc_profit(exit_price, size_to_close)
+        self.realized_profit += profit
+        self.current_size -= size_to_close
 
-            if remaining_size == 0:
-                break
+        action = 'close_trade' if self.current_size == 0 else 'partial_close'
+        event = {
+            'action': action,
+            'time': exit_time,
+            'exit_price': exit_price,
+            'closed_size': size_to_close,
+            'remaining_size': self.current_size,
+            'profit': profit
+        }
+        self.modifications.append(event)
 
-        if remaining_size > 0:
-            raise Exception("Attempted to close more than the total open size.")
+        if self.current_size == 0:
+            self.exit_time = exit_time
 
-    def modify_sl_tp(self, modification_time: Union[datetime, str], new_sl: Optional[float] = None, new_tp: Optional[float] = None):
-        # Convert modification_time if it is a string
-        if isinstance(modification_time, str):
-            modification_time = pd.Timestamp(modification_time)
+    def modify_sl_tp(self,
+                     modification_time: Union[datetime, str],
+                     new_sl: Optional[float] = None,
+                     new_tp: Optional[float] = None) -> None:
+        mod_time = pd.Timestamp(modification_time) if isinstance(modification_time, str) else modification_time
         if new_sl is not None:
             self.sl_price = new_sl
         if new_tp is not None:
             self.tp_price = new_tp
 
         self.modifications.append({
-            KEY_action: "modify_sl_tp",
-            KEY_time: modification_time,
-            KEY_new_sl: new_sl,
-            KEY_new_tp: new_tp
+            'action': 'modify_sl_tp',
+            'time': mod_time,
+            'new_sl': new_sl,
+            'new_tp': new_tp
         })
 
-    def get_trade_summary(self) -> dict:
-        positions_summary: List[dict] = [p.to_dict() for p in self.positions]
-        
-        return {
-            KEY_avg_entry_price: self.avg_entry_price,
-            KEY_total_size: self.total_size,
-            KEY_sl_price: self.sl_price,
-            KEY_tp_price: self.tp_price,
-            KEY_positions: positions_summary,
-            KEY_n_positions: len(self.positions),
-            KEY_modifications: self.modifications,
-            KEY_side: self.side
+    def _calc_profit(self, price: float, size: float) -> float:
+        if self.side == 'long':
+            return (price - self.avg_entry_price) * size * self.point_value
+        else:  # short
+            return (self.avg_entry_price - price) * size * self.point_value
+
+    def get_trade_summary(self) -> Dict[str, Any]:
+        summary: Dict[str, Any] = {
+            'side': self.side,
+            'initial_entry_time': self.entry_time,
+            'final_exit_time': self.exit_time,
+            'duration_sec': (self.exit_time - self.entry_time).total_seconds() if self.exit_time else None,
+            'initial_entry_price': self.initial_entry_price,
+            'avg_entry_price': self.avg_entry_price,
+            'current_size': self.current_size,
+            'total_profit': self.realized_profit,
+            'point_value': self.point_value,
+            'sl_price': self.sl_price,
+            'tp_price': self.tp_price,
+            'n_modifications': len(self.modifications),
+            'modifications': self.modifications
         }
+        return summary
 
-    def print_modifications(self):
-        for mod in self.modifications:
-            print(f"{mod['time']} - {mod['action']}: {mod}")
+    def get_state_history(self) -> pd.DataFrame:
+        state_history = []
+        
+        state = {
+            'time': self.modifications[0]['time'],
+            'action': self.modifications[0]['action'],
+            'avg_entry_price': self.modifications[0]['entry_price'],
+            'current_size': self.modifications[0]['size'],
+            'realized_profit': 0.0,
+            'sl_price': self.modifications[0]['sl_price'],
+            'tp_price': self.modifications[0]['tp_price'],
+            'point_value': self.modifications[0]['point_value']
+        }
+        if state['current_size'] > 0 and state['sl_price'] is not None:
+            state['open_risk'] = abs(state['avg_entry_price'] - state['sl_price']) * state['current_size'] * state['point_value']
+        else:
+            state['open_risk'] = 0.0
+            
+        state_history.append(state.copy())
+        
+        for mod in self.modifications[1:]:
+            new_state = state.copy()
+            new_state['time'] = mod['time']
+            new_state['action'] = mod['action']
+            
+            if mod['action'] == 'add_position':
+                prev_size = new_state['current_size']
+                add_size = mod['size']
+                prev_avg = new_state['avg_entry_price']
+                add_price = mod['entry_price']
+                new_size = prev_size + add_size
+                new_avg = (prev_avg * prev_size + add_price * add_size) / new_size
+                new_state['avg_entry_price'] = new_avg
+                new_state['current_size'] = new_size
+                if mod.get('new_sl') is not None:
+                    new_state['sl_price'] = mod['new_sl']
+                if mod.get('new_tp') is not None:
+                    new_state['tp_price'] = mod['new_tp']
+            elif mod['action'] in ['partial_close', 'close_trade']:
+                new_state['current_size'] -= mod['closed_size']
+                new_state['realized_profit'] += mod['profit']
+                if mod['action'] == 'close_trade':
+                    new_state['current_size'] = 0
+            elif mod['action'] == 'modify_sl_tp':
+                if mod.get('new_sl') is not None:
+                    new_state['sl_price'] = mod['new_sl']
+                if mod.get('new_tp') is not None:
+                    new_state['tp_price'] = mod['new_tp']
+                    
+            if new_state['current_size'] > 0 and new_state['sl_price'] is not None:
+                new_state['open_risk'] = abs(new_state['avg_entry_price'] - new_state['sl_price']) * new_state['current_size'] * new_state['point_value']
+            else:
+                new_state['open_risk'] = 0.0
+            state = new_state.copy()
+            state_history.append(new_state.copy())
+            
+        df = pd.DataFrame(state_history)
+        df['time'] = pd.to_datetime(df['time'])
+        df = df.sort_values('time').reset_index(drop=True)
+        return df
 
-__ALL__ = __ALL__.extend([Execution, Position])
+    def to_trade_row(self) -> Dict[str, Any]:
+        summary = self.get_trade_summary()
+        row = {
+            'side': summary['side'],
+            'initial_entry_time': summary['initial_entry_time'],
+            'final_exit_time': summary['final_exit_time'],
+            'duration_sec': summary['duration_sec'],
+            'initial_entry_price': summary['initial_entry_price'],
+            'avg_entry_price': summary['avg_entry_price'],
+            'initial_size': self.initial_size,
+            'final_size': summary['current_size'],
+            'total_profit': summary['total_profit'],
+            'point_value': summary['point_value'],
+            'sl_price': summary['sl_price'],
+            'tp_price': summary['tp_price'],
+            'n_modifications': summary['n_modifications']
+        }
+        return row
 
+    def plot_trade_levels(self) -> None:
+        """
+        Plots the trade levels over time using seaborn.
+        This includes:
+         - The evolving average entry price.
+         - SL and TP levels.
+         - The open risk at each event.
+        """
+        df = self.get_state_history()
+        
+        # Melt the DataFrame so that we can plot multiple lines easily.
+        df_melted = df.melt(id_vars=["time", "action"], value_vars=["avg_entry_price", "sl_price", "tp_price", "open_risk"],
+                            var_name="level_type", value_name="value")
+        
+        # Initialize the seaborn style.
+        sns.set(style="whitegrid")
+        
+        plt.figure(figsize=(12, 6))
+        ax = sns.lineplot(data=df_melted, x="time", y="value", hue="level_type", marker="o")
+        
+        # Annotate events on the plot (optionally, add action labels on top of the markers).
+        for idx, row in df.iterrows():
+            ax.annotate(row['action'], (row['time'], row['open_risk']), 
+                        textcoords="offset points", xytext=(0, 5),
+                        ha='center', fontsize=8, color="black")
+        
+        ax.set_title("Trade Price Levels & Open Risk Over Time")
+        ax.set_xlabel("Time")
+        ax.set_ylabel("Value")
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        plt.legend(title="Level")
+        plt.show()
 
-assert type(CONST_BUY)==str
-assert CONST_BUY == 'buy'
+    def __repr__(self) -> str:
+        """
+        Provide a concise summary of the trade for debugging purposes.
+        Example output:
+          Trade(long): Entry=1.2000 at 2023-10-01 09:00:00, Avg=1.2010,
+          Open Size=50, Profit=+150.00, SL=1.1950, TP=1.2100, Modifications=4
+        """
+        summary = self.get_trade_summary()
+        status = "Closed" if self.exit_time is not None else "Open"
+        profit_str = f"{summary['total_profit']:.2f}"
+        return (f"Trade({self.side.title()}): Entry={summary['initial_entry_price']:.4f} @ {summary['initial_entry_time']}, "
+                f"Avg={summary['avg_entry_price']:.4f}, Size={summary['current_size']}, Profit={profit_str}, "
+                f"SL={summary['sl_price']:.4f}, TP={summary['tp_price']:.4f}, "
+                f"Status={status}, Mods={summary['n_modifications']})")
+
+    def __str__(self) -> str:
+        summary = self.get_trade_summary()
+        lines = [
+            f"Trade Summary:",
+            f"  Side: {summary['side']}",
+            f"  Entry: {summary['initial_entry_price']} @ {summary['initial_entry_time']}",
+            f"  Avg Entry: {summary['avg_entry_price']}",
+            f"  Current Size: {summary['current_size']}",
+            f"  SL: {summary['sl_price']}  TP: {summary['tp_price']}",
+            f"  Total Profit: {summary['total_profit']:.2f}",
+            f"  Point Value: {summary['point_value']}",
+            f"  Duration (sec): {summary['duration_sec']}",
+            f"  Modifications:"
+        ]
+        for mod in summary['modifications']:
+            lines.append(f"    {mod['time']} - {mod['action']}: {mod}")
+        return "\n".join(lines)
+
+# --- Example usage in Jupyter Notebook ---
+if __name__ == "__main__":
+    # Create a trade instance.
+    trade = Trade(entry_price=1.2000,
+                  size=100,
+                  entry_time="2023-10-01 09:00:00",
+                  side="long",
+                  sl_price=1.1950,
+                  tp_price=1.2100,
+                  sl_monetary_value=500)
+    trade.add_position(entry_price=1.2010,
+                       size=50,
+                       entry_time="2023-10-01 09:30:00")
+    trade.modify_sl_tp(modification_time="2023-10-01 10:00:00", new_sl=1.1940)
+    trade.close_position(exit_price=1.2050, exit_time="2023-10-01 11:00:00", size=80)
+    trade.close_position(exit_price=1.2080, exit_time="2023-10-01 12:00:00")
+    
+    # Print the concise representation.
+    print(repr(trade))
+    
+    # Plot the trade levels and open risk over time using seaborn.
+    trade.plot_trade_levels()

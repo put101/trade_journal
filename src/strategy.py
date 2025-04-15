@@ -2,6 +2,26 @@ import logging
 from src.tradecli import Trade, TradeJournal
 import pandas as pd
 from pprint import pprint as pp
+import utils
+
+
+class StrategyV1():
+    def __init__(self) -> None:
+        pass
+    
+    def sanity_check(self, df: pd.DataFrame):
+        """Check for required columns in the DataFrame."""
+        must_have_cols = set(['entry_time', 'rr', 'outcome', 'htf_poi_ltf_confirmation'])
+        
+        cols = set(df.columns)
+
+        # Check for missing columns
+        missing_cols = must_have_cols - cols
+        if missing_cols:
+            logging.warning(f"Missing required columns: {missing_cols}")
+        else:
+            utils.ok('StrategyV1')
+
 
 def sanity_checks(df: pd.DataFrame, jr: TradeJournal):
     """Perform general sanity checks on the trade journal and DataFrame.

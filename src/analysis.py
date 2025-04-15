@@ -13,6 +13,8 @@ import logging
 
 import journal as jr
 
+from functools import partial
+
 
 def perform_anova(df: pd.DataFrame, dependent_var: str, independent_var: str):
     """

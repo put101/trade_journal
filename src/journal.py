@@ -18,7 +18,7 @@ import scipy
 from src.tradecli import * 
 from src.features import *
 from src.generate_test_data import get_test_data_journal
-from trade import *
+from trade_old import *
 
 logging.basicConfig(level=logging.INFO)
 
@@ -39,7 +39,7 @@ j.get_all_ignored_tags = get_all_ignored_tags
 t1 = None #TODO
 t2 = Trade(uid="2")
 t2.add_tag('taken', True)
-Account.add_account_to_trade(t2, ACC_MT5_VANTAGE)
+Account.add_to_trade(t2, ACC_MT5_VANTAGE)
 EntryTime(pd.Timestamp('2025-02-18 14:10:00')).add_tags_to_trade(t2)
 TradePosition(entry_price=2914.03,sl_price=2910.94, tp_price=3000.0, close_price=None).add_tags_to_trade(t2)
 
@@ -47,7 +47,7 @@ print(t2)
 j.add_trade(t2)
 
 t4 = Trade(uid="4")
-Account.add_account_to_trade(t4, ACC_IDEAL)
+Account.add_to_trade(t4, ACC_IDEAL)
 EntryTime(pd.Timestamp('2025-02-22 15:11:00')).add_tags_to_trade(t4)
 # limit order, tp hit
 TradePosition(entry_price=22_164.40, sl_price=22_179.09, tp_price=22_105.27, close_price=22_105.27).add_tags_to_trade(t4)
@@ -74,6 +74,17 @@ t = Execution(83091.31, '2025-03-17 14:17:00', 83249.60, 71500.00, 0.1, 'sell', 
 j.add_trade(t5)
 
 
+
+t6 = Trade(uid="6")
+e6 = Execution(85091.31, '2025-04-15 09:20:00', 85527.00, 90339.17, 0.5, 'buy', -100.88)
+
+# 0.5 x 85755.96, 0.2 x (85804.90, 85855.68, 85978.37)
+# spread fix 1600
+# balance 175.94
+# pip value: 85755.96 x 0.5 -> 85866.18 48.55
+# orig SL: 85527.00 -> -100.88 EUR
+
+
 logging.info("Adding default tags to all trades")
 # add defaults to all trades or certain tags that should not be None
 
@@ -85,7 +96,9 @@ for trade in j.trades:
     InitialReward.add_tags_to_trade(trade)
     # DEFAULTS
     RiskManagement.add_tags_to_trade(trade, RiskManagement.NO_MANAGEMENT)
+    Outcome.add_tags_to_trade(trade)
     # set False for the PA tags that are not set
+    POI.add_tags(trade, [POI.DEFAULT_POI])
     
     for tag in PA.ALL_TAGS():
         if not trade.has_tag(tag):

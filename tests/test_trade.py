@@ -1,6 +1,6 @@
 import pytest
 from datetime import datetime
-from trade import *
+from trade_old import *
 import pandas as pd
 from pandas import Timestamp
 

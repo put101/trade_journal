@@ -18,7 +18,7 @@ from typing import List, Optional
 import pandas as pd
 import scipy.stats
 from tradecli import Trade
-from trade import cTraderStylePosition
+from trade_old import cTraderStylePosition
 
 logging.basicConfig(level=logging.INFO)
 

@@ -50,7 +50,7 @@ for i in range(5, 15):
     t.add_tag(random.choice([PA.type_2_(tf) for tf in timeframes]), True)
     t.add_tag(random.choice([PA.type_3_(tf) for tf in timeframes]), True)
     t.add_tag("unit_test", True)  # Add unit_test tag
-    Account.add_account_to_trade(t, "test_account")  # Add account tag
+    Account.add_to_trade(t, "test_account")  # Add account tag
     
     if USE_TEST_DATA:
         j.add_trade(t)
@@ -124,7 +124,7 @@ logging.info("Creating example trades for actual and ideal executions")
 t1 = None #TODO
 t2 = Execution(uid="2")
 t2.add_tag('taken', True)
-Account.add_account_to_trade(t2, ACC_MT5_VANTAGE)
+Account.add_to_trade(t2, ACC_MT5_VANTAGE)
 EntryTime(pd.Timestamp('2025-02-18 14:10:00')).add_tags_to_trade(t2)
 TradePosition(entry_price=2914.03,sl_price=2910.94, tp_price=3000.0, close_price=None).add_tags_to_trade(t2)
 
@@ -132,7 +132,7 @@ print(t2)
 j.add_trade(t2)
 
 t4 = Execution(uid="4")
-Account.add_account_to_trade(t4, ACC_IDEAL)
+Account.add_to_trade(t4, ACC_IDEAL)
 EntryTime(pd.Timestamp('2025-02-22 15:11:00')).add_tags_to_trade(t4)
 # limit order, tp hit
 TradePosition(entry_price=22_164.40, sl_price=22_179.09, tp_price=22_105.27, close_price=22_105.27).add_tags_to_trade(t4)

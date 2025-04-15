@@ -16,7 +16,7 @@ def get_test_data_journal() -> TradeJournal:
         t.add_tag(random.choice([PA.type_2_(tf) for tf in timeframes]), True)
         t.add_tag(random.choice([PA.type_3_(tf) for tf in timeframes]), True)
         t.add_tag("unit_test", True)
-        Account.add_account_to_trade(t, "test_account")
+        Account.add_to_trade(t, "test_account")
 
         entry_price = round(1.1000 + random.uniform(0.01, 0.05), 4)
         is_long = random.choice([True, False])

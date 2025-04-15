@@ -68,6 +68,15 @@ class Trade:
     def add_tag(self, key: str, value: Union[bool, float]):
         self.tags.append(Tag(key=key, value=value, timestamp=None))
 
+    def add_dict(self, d: dict):
+        """Add a dictionary of tags to the trade.
+        
+        Args:
+            d (dict): Dictionary of tag keys and values to add to the trade
+        """
+        for key, value in d.items():
+            self.add_tag(key, value)
+
     def has_tag(self, key: str) -> bool:
         return any(tag.key == key for tag in self.tags)
 

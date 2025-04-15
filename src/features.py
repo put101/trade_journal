@@ -18,8 +18,9 @@ from typing import List, Optional
 import pandas as pd
 import scipy.stats
 from tradecli import Trade
-from trade import *
+from trade_old import *
 from IPython.display import display  # Import display for Jupyter Notebook
+import utils
 
 logging.basicConfig(level=logging.INFO)
 
@@ -54,6 +55,81 @@ class BaseFeature(Feature):
 
     def add_tags_to_trade(self, trade: Execution):
         pass
+    
+    @classmethod
+    def sanity_check(cls, df: pd.DataFrame):
+        """Provides autmoatic sanity checks on a full trade journal dataframe to spot obvious user or data errors."""
+        cls._sanity_ok( "(pass)")
+
+    @classmethod
+    def _sanity_ok(cls, txt=''):      
+        utils.green_print(f"OK - {cls.__name__} sanity check: " + str(txt))
+    
+    @classmethod
+    def _sanity_fail(cls, txt):
+        utils.pink_print(f"FAILED - {cls.__name__} sanity check: " + str(txt))
+        
+
+def reorder_dataframe_columns(
+    df: pd.DataFrame, 
+    fixed_features: List[str], 
+    feature_classes: List[Union[str, Type[BaseFeature]]]
+) -> pd.DataFrame:
+    """
+    Reorder DataFrame columns based on a predefined order of fixed features and feature classes.
+
+    Parameters:
+    - df: The DataFrame to reorder.
+    - fixed_features: A list of column names that should appear first in the specified order.
+    - feature_classes: A list of classes or strings whose ALL_TAGS() will be used to determine the order of columns.
+
+    Returns:
+    - A new DataFrame with columns reordered.
+    """
+    # Initialize an empty list to hold the ordered columns
+    ordered_columns = []
+
+    # Add fixed features first, ensuring they are unique
+    for feature in fixed_features:
+        if feature in df.columns and feature not in ordered_columns:
+            ordered_columns.append(feature)
+
+    # Add columns from each class in the specified order
+    # Add columns from each class in the specified order
+    for item in feature_classes:
+        if isinstance(item, str):
+            # If it's a string, just add it if it exists in the DataFrame
+            if item in df.columns and item not in ordered_columns:
+                ordered_columns.append(item)
+        elif isinstance(item, type) and issubclass(item, BaseFeature):
+            # If it's a class, add all its tags
+            for tag in item.ALL_TAGS():
+                if tag in df.columns and tag not in ordered_columns:
+                    ordered_columns.append(tag)
+        else:
+            raise ValueError(f'item: {item} is not str or a subclass of BaseFeature: {BaseFeature}')
+
+    logging.debug('ordered_columns: ' + str(ordered_columns))
+    # Get the remaining columns that are not in the ordered list
+    remaining_columns = [col for col in df.columns if col not in ordered_columns]
+    logging.debug('remaining_columns: ' + str(remaining_columns))
+    # Combine the ordered columns with the remaining columns
+    final_order = ordered_columns + remaining_columns
+    
+    df_sorted = df[final_order]
+    
+    assert len(df.columns) == len(df_sorted.columns)
+    assert set(df.columns) == set(df.columns)
+    
+    return df_sorted 
+
+
+## UTILS
+
+def dict_add_tags(trade: Trade, d: dict):
+    # add any dict of key_values to a trade
+    trade.add_dict(d)
+
 
 class TF(BaseFeature):
     m1="m1"
@@ -158,7 +234,7 @@ class MultiTimeframeAnalysis(BaseFeature):
 
 class POI(BaseFeature):
     TAG_POI = "pois"
-    DEFAULT_POI = None
+    DEFAULT_POI = 'NO_POI'
     TYPE_POI = list[str]
     
     POI_1H_SC = 'poi_1h_sc'
@@ -218,18 +294,18 @@ class POI(BaseFeature):
 
         print("Summary of POIs:")
         print(f"Used POIs: {', '.join(used) if used else 'None'}")
-        print(f"Not Used POIs: {', '.join(not_used) if not_used else 'All POIs are used'}")
+        print(f"Not Used POIs: {', '.join(not_used) if not_used else 'No, i.e All POIs are used'}")
 
     @classmethod
-    def sanity_check(cls, df: pd.DataFrame, threshold: float = 0.5):
+    def sanity_check(cls, df: pd.DataFrame, threshold: float = 0.5, use_warn=False, use_display=False):
         """Check the POI columns for valid values and report statistics."""
         poi_columns = cls.get_cols_df(df)
-        print("POI Sanity Check:")
-        
-        # Create a DataFrame to hold the results
+
+        failed = []        # Create a DataFrame to hold the results
         results = []
         
-        for col in poi_columns:
+        #for col in poi_columns:
+        for col in ['poi']:
             valid_count = df[col].notna().sum()
             total_count = len(df[col])
             valid_ratio = valid_count / total_count if total_count > 0 else 0
@@ -242,7 +318,9 @@ class POI(BaseFeature):
             })
             
             if valid_ratio < threshold:
-                print(f"Warning: Column '{col}' has a low valid ratio ({valid_ratio:.2f}), consider checking the data.")
+                failed.append(f"Column '{col}' has a low valid ratio ({valid_ratio:.2f}), consider checking the data." )
+                if use_warn:
+                    logging.warn(f"Warning: Column '{col}' has a low valid ratio ({valid_ratio:.2f}), consider checking the data.")
 
         # Create a DataFrame from the results
         results_df = pd.DataFrame(results)
@@ -253,12 +331,19 @@ class POI(BaseFeature):
             # Get the index of the 'Valid Ratio' column
             idx = row.index.get_loc('Valid Ratio')
             if row['Valid Ratio'] < threshold:
-                styles[idx] = 'background-color: orange'
+                styles[idx] = 'background-color: salmon'
             return styles
 
         results_df_styled = results_df.style.apply(highlight_issues, axis=1)
-        display(results_df_styled)
+        if use_display:
+            display(results_df_styled)
 
+
+
+        if not failed:
+            cls._sanity_ok()
+        else:
+            cls._sanity_fail(str(failed))
 
 class RiskManagement(BaseFeature):
     
@@ -299,9 +384,9 @@ class Outcome(BaseFeature):
     FEATURE_OUTCOMECATEGORIES = [WIN, LOSS, BE]
     
     
-    @staticmethod
-    def ALL_TAGS():
-        return [Outcome.WIN, Outcome.LOSS, Outcome.BE]
+    @classmethod
+    def ALL_TAGS(cls):
+        return [cls.FEATURE_OUTCOME]
     
     @staticmethod
     def get_outcome(rr: float) -> str:
@@ -575,30 +660,40 @@ class RR(BaseFeature):
 @dataclass
 class Account(BaseFeature):
     DEFAULT = "default"
+    TAG_ACCOUNT = 'account'
 
-    account_name: str
+    @classmethod
+    def ALL_TAGS(cls):
+        return [cls.TAG_ACCOUNT]
 
-
-    @staticmethod
-    def ALL_TAGS():
-        return [Account.DEFAULT]
-
-    @staticmethod
-    def IGNORED_TAGS():
-        return [Account.TAG_ACCOUNT_NAME]
+    @classmethod
+    def IGNORED_TAGS(cls):
+        return [cls.TAG_ACCOUNT]
     
-    @staticmethod
-    def CATEGORICAL_TAGS():
-        return [Account.TAG_ACCOUNT_NAME]
-    
-    @staticmethod
-    def add_default(trade: Execution):
-        trade.add_tag("account_name", Account.DEFAULT)
-    
-    @staticmethod
-    def add_account_to_trade(trade: Execution, account_name: str):
-        trade.add_tag("account", account_name)
+    @classmethod
+    def CATEGORICAL_TAGS(cls):
+        return [cls.TAG_ACCOUNT]
 
+    @classmethod
+    def add_to_trade(cls, trade: Execution, account_name: str):
+        trade.add_tag(cls.TAG_ACCOUNT, account_name)
+
+    @classmethod
+    def sanity_check(cls, df: pd.DataFrame, threshold=1.0):
+        accs = df[cls.TAG_ACCOUNT]
+    
+        logging.debug(accs)
+        
+        valid_count = accs.notna().sum()
+        total_count = len(accs)
+        valid_ratio = valid_count / total_count if total_count > 0 else 0
+        
+        if valid_ratio < threshold:
+            cls._sanity_fail(f'valid_ratio={valid_ratio:.2f} to low (to many nans)')
+        else:
+            cls._sanity_ok()
+        
+        
 
 def all_feature_classes() -> List[Type[Feature]]:
     return [Confidence, MultiTimeframeAnalysis, RiskManagement, Outcome, TradePosition, InitialReward, PotentialReward, EntryTime, Sessions, RR]

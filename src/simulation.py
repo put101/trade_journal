@@ -100,7 +100,7 @@ def generate_simulated_trades(config: SimConfig) -> List[Execution]:
                         trade = Execution(uid=f"sim_{trade_count}")
                         
                         # Add account
-                        Account.add_account_to_trade(trade, config.account_name)
+                        Account.add_to_trade(trade, config.account_name)
                         
                         # Generate trade parameters
                         is_long = random.choice([True, False])
