@@ -15,7 +15,7 @@ class Trade:
                  sl_monetary_value: float,
                  point_value: Optional[float] = None):
         """
-        Initialize a trade with an initial position and stop-loss/take-profit.
+        Initialize a trade with an initial position, stop-loss, and take-profit.
         """
         self.side = side.lower()
         self.entry_time = pd.Timestamp(entry_time) if isinstance(entry_time, str) else entry_time
@@ -36,6 +36,13 @@ class Trade:
         if not (0 < self.point_value < 10_000):
             raise ValueError("Calculated point value is out of expected range.")
 
+        # Flags and counters for partial closes.
+        self.has_partials_closed = False
+        self.n_partial_closes = 0
+        self.first_partial_close_time: Optional[datetime] = None
+        self.last_partial_close_time: Optional[datetime] = None
+
+        # Event log.
         self.modifications: List[Dict[str, Any]] = []
         self.modifications.append({
             'action': 'initial_trade',
@@ -76,7 +83,13 @@ class Trade:
     def close_position(self,
                        exit_price: float,
                        exit_time: Union[datetime, str],
-                       size: Optional[float] = None) -> None:
+                       size: Optional[float] = None,
+                       close_reason: Optional[str] = None) -> None:
+        """
+        Close part or all of the trade.
+        
+        The optional close_reason parameter lets the user indicate why the trade was closed (e.g. "SL", "TP", "BE", "Manual").
+        """
         exit_time = pd.Timestamp(exit_time) if isinstance(exit_time, str) else exit_time
         size_to_close = size or self.current_size
         if size_to_close > self.current_size:
@@ -86,6 +99,14 @@ class Trade:
         self.realized_profit += profit
         self.current_size -= size_to_close
 
+        # Check and update partial close flags.
+        if size_to_close < (self.current_size + size_to_close):
+            self.has_partials_closed = True
+            self.n_partial_closes += 1
+            if self.first_partial_close_time is None:
+                self.first_partial_close_time = exit_time
+            self.last_partial_close_time = exit_time
+
         action = 'close_trade' if self.current_size == 0 else 'partial_close'
         event = {
             'action': action,
@@ -93,7 +114,8 @@ class Trade:
             'exit_price': exit_price,
             'closed_size': size_to_close,
             'remaining_size': self.current_size,
-            'profit': profit
+            'profit': profit,
+            'close_reason': close_reason
         }
         self.modifications.append(event)
 
@@ -123,6 +145,28 @@ class Trade:
         else:  # short
             return (self.avg_entry_price - price) * size * self.point_value
 
+    def potential_profit(self) -> float:
+        """
+        Compute the potential profit if the TP level is hit.
+        """
+        if self.current_size <= 0:
+            return 0.0
+        if self.side == 'long':
+            return (self.tp_price - self.avg_entry_price) * self.current_size * self.point_value
+        else:
+            return (self.avg_entry_price - self.tp_price) * self.current_size * self.point_value
+
+    def potential_loss(self) -> float:
+        """
+        Compute the potential loss if the SL level is hit.
+        """
+        if self.current_size <= 0:
+            return 0.0
+        if self.side == 'long':
+            return (self.avg_entry_price - self.sl_price) * self.current_size * self.point_value
+        else:
+            return (self.sl_price - self.avg_entry_price) * self.current_size * self.point_value
+
     def get_trade_summary(self) -> Dict[str, Any]:
         summary: Dict[str, Any] = {
             'side': self.side,
@@ -137,13 +181,38 @@ class Trade:
             'sl_price': self.sl_price,
             'tp_price': self.tp_price,
             'n_modifications': len(self.modifications),
+            'potential_profit': self.potential_profit(),
+            'potential_loss': self.potential_loss(),
+            'has_partials_closed': self.has_partials_closed,
+            'n_partial_closes': self.n_partial_closes,
+            'first_partial_close_time': self.first_partial_close_time,
+            'last_partial_close_time': self.last_partial_close_time,
             'modifications': self.modifications
         }
         return summary
 
     def get_state_history(self) -> pd.DataFrame:
+        """
+        Replay the events logged in modifications to generate a state history DataFrame.
+        Each row includes the evolving average entry price, SL, TP, open risk,
+        and now also potential profit and loss.
+        """
         state_history = []
         
+        # Define a helper to compute potential profit and loss for a given state.
+        def compute_pros(state):
+            if state['current_size'] > 0:
+                if self.side == 'long':
+                    state['potential_profit'] = (state['tp_price'] - state['avg_entry_price']) * state['current_size'] * state['point_value']
+                    state['potential_loss'] = (state['avg_entry_price'] - state['sl_price']) * state['current_size'] * state['point_value']
+                else:
+                    state['potential_profit'] = (state['avg_entry_price'] - state['tp_price']) * state['current_size'] * state['point_value']
+                    state['potential_loss'] = (state['sl_price'] - state['avg_entry_price']) * state['current_size'] * state['point_value']
+            else:
+                state['potential_profit'] = 0.0
+                state['potential_loss'] = 0.0
+
+        # Build initial state.
         state = {
             'time': self.modifications[0]['time'],
             'action': self.modifications[0]['action'],
@@ -154,11 +223,9 @@ class Trade:
             'tp_price': self.modifications[0]['tp_price'],
             'point_value': self.modifications[0]['point_value']
         }
-        if state['current_size'] > 0 and state['sl_price'] is not None:
-            state['open_risk'] = abs(state['avg_entry_price'] - state['sl_price']) * state['current_size'] * state['point_value']
-        else:
-            state['open_risk'] = 0.0
-            
+        state['open_risk'] = (abs(state['avg_entry_price'] - state['sl_price']) *
+                              state['current_size'] * state['point_value']) if state['current_size'] > 0 else 0.0
+        compute_pros(state)
         state_history.append(state.copy())
         
         for mod in self.modifications[1:]:
@@ -190,17 +257,15 @@ class Trade:
                 if mod.get('new_tp') is not None:
                     new_state['tp_price'] = mod['new_tp']
                     
-            if new_state['current_size'] > 0 and new_state['sl_price'] is not None:
-                new_state['open_risk'] = abs(new_state['avg_entry_price'] - new_state['sl_price']) * new_state['current_size'] * new_state['point_value']
-            else:
-                new_state['open_risk'] = 0.0
+            new_state['open_risk'] = (abs(new_state['avg_entry_price'] - new_state['sl_price']) *
+                                       new_state['current_size'] * new_state['point_value']) if new_state['current_size'] > 0 else 0.0
+            compute_pros(new_state)
             state = new_state.copy()
             state_history.append(new_state.copy())
             
         df = pd.DataFrame(state_history)
         df['time'] = pd.to_datetime(df['time'])
-        df = df.sort_values('time').reset_index(drop=True)
-        return df
+        return df.sort_values('time').reset_index(drop=True)
 
     def to_trade_row(self) -> Dict[str, Any]:
         summary = self.get_trade_summary()
@@ -217,50 +282,71 @@ class Trade:
             'point_value': summary['point_value'],
             'sl_price': summary['sl_price'],
             'tp_price': summary['tp_price'],
-            'n_modifications': summary['n_modifications']
+            'n_modifications': summary['n_modifications'],
+            'potential_profit': summary['potential_profit'],
+            'potential_loss': summary['potential_loss'],
+            'has_partials_closed': summary['has_partials_closed'],
+            'n_partial_closes': summary['n_partial_closes']
         }
         return row
 
     def plot_trade_levels(self) -> None:
         """
-        Plots the trade levels over time using seaborn.
+        Plot the evolution of trade levels over time using seaborn.
         This includes:
-         - The evolving average entry price.
-         - SL and TP levels.
-         - The open risk at each event.
+          - Average entry price, SL, TP on the primary y-axis
+          - Open risk, potential profit and potential loss on the secondary y-axis
         """
         df = self.get_state_history()
         
-        # Melt the DataFrame so that we can plot multiple lines easily.
-        df_melted = df.melt(id_vars=["time", "action"], value_vars=["avg_entry_price", "sl_price", "tp_price", "open_risk"],
-                            var_name="level_type", value_name="value")
+        # Separate price and risk columns
+        price_columns = ["avg_entry_price", "sl_price", "tp_price"]
+        risk_columns = ["open_risk", "potential_profit", "potential_loss"]
         
-        # Initialize the seaborn style.
-        sns.set(style="whitegrid")
+        # Create figure with two y-axes
+        fig, ax1 = plt.subplots(figsize=(12, 6))
+        ax2 = ax1.twinx()
         
-        plt.figure(figsize=(12, 6))
-        ax = sns.lineplot(data=df_melted, x="time", y="value", hue="level_type", marker="o")
+        # Plot price data on primary y-axis
+        df_prices = df.melt(id_vars=["time", "action"], value_vars=price_columns,
+                           var_name="level_type", value_name="value")
+        sns.lineplot(data=df_prices, x="time", y="value", hue="level_type", 
+                    marker="o", ax=ax1, linestyle='-')
         
-        # Annotate events on the plot (optionally, add action labels on top of the markers).
-        for idx, row in df.iterrows():
-            ax.annotate(row['action'], (row['time'], row['open_risk']), 
-                        textcoords="offset points", xytext=(0, 5),
+        # Plot risk data on secondary y-axis
+        df_risks = df.melt(id_vars=["time", "action"], value_vars=risk_columns,
+                          var_name="level_type", value_name="value")
+        sns.lineplot(data=df_risks, x="time", y="value", hue="level_type",
+                    marker="s", ax=ax2, linestyle='--')
+        
+        # Annotate events on the plot
+        for _, row in df.iterrows():
+            ax1.annotate(row['action'], (row['time'], row['avg_entry_price']),
+                        textcoords="offset points", xytext=(0, 10),
                         ha='center', fontsize=8, color="black")
         
-        ax.set_title("Trade Price Levels & Open Risk Over Time")
-        ax.set_xlabel("Time")
-        ax.set_ylabel("Value")
+        # Customize the plot
+        ax1.set_xlabel("Time")
+        ax1.set_ylabel("Price")
+        ax2.set_ylabel("Risk/P&L")
+        
+        # Adjust legends
+        lines1, labels1 = ax1.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        ax1.legend(lines1, labels1, loc='upper left', title="Price Levels")
+        ax2.legend(lines2, labels2, loc='upper right', title="Risk Metrics")
+        
+        plt.title("Trade Levels Over Time")
         plt.xticks(rotation=45)
         plt.tight_layout()
-        plt.legend(title="Level")
         plt.show()
 
     def __repr__(self) -> str:
         """
-        Provide a concise summary of the trade for debugging purposes.
-        Example output:
-          Trade(long): Entry=1.2000 at 2023-10-01 09:00:00, Avg=1.2010,
-          Open Size=50, Profit=+150.00, SL=1.1950, TP=1.2100, Modifications=4
+        A concise representation for debugging.
+        Example:
+          Trade(Long): Entry=1.2000 @ 2023-10-01 09:00:00, Avg=1.2010, Size=50, Profit=+150.00,
+                      SL=1.1950, TP=1.2100, Status=Closed, Mods=4
         """
         summary = self.get_trade_summary()
         status = "Closed" if self.exit_time is not None else "Open"
@@ -273,7 +359,7 @@ class Trade:
     def __str__(self) -> str:
         summary = self.get_trade_summary()
         lines = [
-            f"Trade Summary:",
+            "Trade Summary:",
             f"  Side: {summary['side']}",
             f"  Entry: {summary['initial_entry_price']} @ {summary['initial_entry_time']}",
             f"  Avg Entry: {summary['avg_entry_price']}",
@@ -282,13 +368,16 @@ class Trade:
             f"  Total Profit: {summary['total_profit']:.2f}",
             f"  Point Value: {summary['point_value']}",
             f"  Duration (sec): {summary['duration_sec']}",
-            f"  Modifications:"
+            f"  Potential Profit: {summary['potential_profit']:.2f}",
+            f"  Potential Loss: {summary['potential_loss']:.2f}",
+            f"  Partials Closed: {summary['has_partials_closed']} (n={summary['n_partial_closes']})",
+            "  Modifications:"
         ]
         for mod in summary['modifications']:
             lines.append(f"    {mod['time']} - {mod['action']}: {mod}")
         return "\n".join(lines)
 
-# --- Example usage in Jupyter Notebook ---
+# --- Example usage in your Jupyter Notebook ---
 if __name__ == "__main__":
     # Create a trade instance.
     trade = Trade(entry_price=1.2000,
@@ -302,11 +391,18 @@ if __name__ == "__main__":
                        size=50,
                        entry_time="2023-10-01 09:30:00")
     trade.modify_sl_tp(modification_time="2023-10-01 10:00:00", new_sl=1.1940)
-    trade.close_position(exit_price=1.2050, exit_time="2023-10-01 11:00:00", size=80)
-    trade.close_position(exit_price=1.2080, exit_time="2023-10-01 12:00:00")
+    # Partial close with reason.
+    trade.close_position(exit_price=1.2050, exit_time="2023-10-01 11:00:00", size=80, close_reason="Partial Close")
+    # Final close with reason.
+    trade.close_position(exit_price=1.2080, exit_time="2023-10-01 12:00:00", close_reason="TP Hit")
     
-    # Print the concise representation.
+    # Print concise representation.
     print(repr(trade))
     
-    # Plot the trade levels and open risk over time using seaborn.
+    # Plot the trade evolution including potential profit/loss.
     trade.plot_trade_levels()
+    
+    # Convert trade into one row for DataFrame aggregation.
+    trade_row = trade.to_trade_row()
+    df = pd.DataFrame([trade_row])
+    print(df)
