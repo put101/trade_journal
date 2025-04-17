@@ -17,4 +17,3 @@ def err(txt):
 
 def pink_print(txt):
     print('\033[95m', txt, '\033[0m', flush=True)
-

@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 import pandas as pd
 import scipy.stats
-from tradecli import Trade
+from tradecli import DataPoint
 from trade_old import cTraderStylePosition
 
 logging.basicConfig(level=logging.INFO)
@@ -27,7 +27,7 @@ from abc import ABC, abstractmethod
 
 class Feature(ABC):
     @abstractmethod
-    def add_tags_to_trade(self, trade: Trade):
+    def add_tags_to_trade(self, trade: DataPoint):
         pass
 
 class BaseFeature(Feature):
@@ -51,7 +51,7 @@ class BaseFeature(Feature):
     def DATETIME_TAGS() -> List[str]:
         return []
 
-    def add_tags_to_trade(self, trade: Trade):
+    def add_tags_to_trade(self, trade: DataPoint):
         pass
 
 class TF(BaseFeature):
@@ -87,7 +87,7 @@ class PA(BaseFeature):
     def ALL_TAGS():
         return [PA.type_1_(tf) for tf in TF.ALL_TAGS()] + [PA.type_2_(tf) for tf in TF.ALL_TAGS()] + [PA.type_3_(tf) for tf in TF.ALL_TAGS()]
     
-    def used_tags_in(trade: Trade, explicit_search=False) -> list[str]:
+    def used_tags_in(trade: DataPoint, explicit_search=False) -> list[str]:
         if explicit_search:
             return [t.key for t in trade.tags if t.key in PA.ALL_TAGS()]
         if not explicit_search:
@@ -102,10 +102,10 @@ class PA(BaseFeature):
     def used_tags_in_df_not_null(df: pd.DataFrame, explicit_search=False) -> list[str]:
         return [col for col in PA.used_tags_in_df(df, explicit_search) if df[col].any()]
     
-    def has_PA_tags(trade: Trade) -> bool:
+    def has_PA_tags(trade: DataPoint) -> bool:
         return any(t for t in trade.tags if t.key in PA.ALL_TAGS())
 
-    def add_tags(trade:Trade, pas:list[str], add_default:bool = False):
+    def add_tags(trade:DataPoint, pas:list[str], add_default:bool = False):
         if add_default:
             for pa in PA.ALL_TAGS():
                 if pa in pas:
@@ -134,7 +134,7 @@ class Confidence(BaseFeature):
         return [Confidence.TAG_ORDINAL_CONFIDENCE] + [f"confidence_{level}" for level in Confidence.LEVELS]
     
     @staticmethod
-    def add_tags_to_trade(trade: Trade, confidence: int):
+    def add_tags_to_trade(trade: DataPoint, confidence: int):
         assert confidence in Confidence.LEVELS
         trade.add_tag(Confidence.TAG_ORDINAL_CONFIDENCE, confidence)
 
@@ -143,7 +143,7 @@ class MultiTimeframeAnalysis(BaseFeature):
     DEFAULT_HTF_POI_LTF_CONFIRMATION = None
     TYPE_HTF_POI_LTF_CONFIRMATION = bool
     
-    def add_tags_to_trade(trade: Trade, htf_poi_ltf_confirmation: bool):
+    def add_tags_to_trade(trade: DataPoint, htf_poi_ltf_confirmation: bool):
         assert htf_poi_ltf_confirmation is not None
         trade.add_tag("htf_poi_ltf_confirmation", htf_poi_ltf_confirmation)
     
@@ -181,7 +181,7 @@ class POI(BaseFeature):
         return [getattr(POI,attr) for attr in dir(POI) if not callable(getattr(POI, attr)) and not attr.startswith("__") and attr.startswith("POI")]
     
     @staticmethod
-    def add_tags(trade: Trade, pois : list[str]):
+    def add_tags(trade: DataPoint, pois : list[str]):
         trade.add_tag("poi", tuple(list(set(pois))))
         
         for poi in POI.ALL_TAGS:
@@ -206,7 +206,7 @@ class RiskManagement(BaseFeature):
     def ALL_TAGS():
         return [RiskManagement.NO_MANAGEMENT, RiskManagement.BE_AFTER_1R, RiskManagement.BE_AFTER_PUSH, RiskManagement.CLOSE_EARLY]
     
-    def add_tags_to_trade(trade: Trade, management_strategy: str):
+    def add_tags_to_trade(trade: DataPoint, management_strategy: str):
         if not trade.has_tag("management_strategy"):
             trade.add_tag("management_strategy", management_strategy)
     
@@ -239,7 +239,7 @@ class Outcome(BaseFeature):
     def get_outcome(rr: float) -> str:
         return Outcome.WIN if rr > 0 else (Outcome.BE if abs(rr) < Outcome.BE_THESHOLD else Outcome.LOSS)
     
-    def add_tags_to_trade(trade: Trade):
+    def add_tags_to_trade(trade: DataPoint):
         rr = next((t.value for t in trade.tags if t.key == Outcome.DEPENDENCY_RR), None)
         if not rr:
             logging.warning(f"Trade {trade.uid} does not have the '{Outcome.DEPENDENCY_RR}' tag")
@@ -304,7 +304,7 @@ class TradePosition(BaseFeature):
         self.tp_price = tp_price
         self.close_price = close_price
 
-    def add_tags_to_trade(self, trade: Trade):
+    def add_tags_to_trade(self, trade: DataPoint):
         trade.add_tag("entry_price", self.entry_price)
         trade.add_tag("sl_price", self.sl_price)
         trade.add_tag("tp_price", self.tp_price)
@@ -349,7 +349,7 @@ class InitialReward(BaseFeature):
         return tp_price - entry_price
     
     @staticmethod
-    def add_tags_to_trade(trade: Trade):
+    def add_tags_to_trade(trade: DataPoint):
         entry_price = next((t.value for t in trade.tags if t.key == "entry_price"), None)
         sl_price = next((t.value for t in trade.tags if t.key == "sl_price"), None)
         tp_price = next((t.value for t in trade.tags if t.key == "tp_price"), None)
@@ -388,7 +388,7 @@ class PotentialReward(BaseFeature):
         return potential_price - entry_price
 
     @staticmethod
-    def add_tags_to_trade(trade: Trade, potential_price: float):
+    def add_tags_to_trade(trade: DataPoint, potential_price: float):
         entry_price = next((t.value for t in trade.tags if t.key == "entry_price"), None)
         sl_price = next((t.value for t in trade.tags if t.key == "sl_price"), None)
         if entry_price is not None and sl_price is not None:
@@ -413,7 +413,7 @@ class EntryTime(BaseFeature):
     def __init__(self, entry_time: datetime):
         self.entry_time = entry_time
             
-    def add_tags_to_trade(self, trade: Trade):
+    def add_tags_to_trade(self, trade: DataPoint):
         if EntryTime.TAG_ENTRY_TIME not in trade.get_tags_dict():
             trade.add_tag("entry_time", self.entry_time)
         else:
@@ -452,12 +452,12 @@ class Sessions(BaseFeature):
             session = Sessions.TOKYO
         return session
     
-    def add_tags_to_trade(ts: pd.Timestamp, trade: Trade):
+    def add_tags_to_trade(ts: pd.Timestamp, trade: DataPoint):
         if ts is not None:
             session = Sessions.session_from_ts(ts)
             trade.add_tag("session", session)
     
-    def add_tags_to_trade(trade: Trade):
+    def add_tags_to_trade(trade: DataPoint):
         ts = next((t.value for t in trade.tags if t.key == EntryTime.TAG_ENTRY_TIME), None)
         if ts is not None:
             session = Sessions.session_from_ts(ts)
@@ -484,7 +484,7 @@ class RR(BaseFeature):
         return (close_price - entry_price) / (entry_price - sl_price)
     
     @staticmethod
-    def add_tags_to_trade(trade: Trade):
+    def add_tags_to_trade(trade: DataPoint):
         entry_price = next((t.value for t in trade.tags if t.key == "entry_price"), None)
         sl_price = next((t.value for t in trade.tags if t.key == "sl_price"), None)
         close_price = next((t.value for t in trade.tags if t.key == "close_price"), None)
@@ -524,11 +524,11 @@ class Account(BaseFeature):
         return [Account.TAG_ACCOUNT_NAME]
     
     @staticmethod
-    def add_default(trade: Trade):
+    def add_default(trade: DataPoint):
         trade.add_tag("account_name", Account.DEFAULT)
     
     @staticmethod
-    def add_account_to_trade(trade: Trade, account_name: str):
+    def add_account_to_trade(trade: DataPoint, account_name: str):
         trade.add_tag("account", account_name)
 
 

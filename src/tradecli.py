@@ -26,7 +26,7 @@ from datetime import datetime
 import logging
 import re
 import pprint
-import features
+#import features
 
 
 
@@ -58,7 +58,7 @@ class Tag:
 
 
 @dataclass
-class Trade:
+class DataPoint:
     uid: str
     tags: List[Tag] = field(default_factory=list)
 
@@ -106,7 +106,7 @@ class Trade:
 
 @dataclass
 class TradeJournal:
-    trades: List[Trade] = field(default_factory=list)
+    trades: List[DataPoint] = field(default_factory=list)
     # path to the assets folder inside the project
     ENV_JOURNAL_ROOT = os.environ.get('JOURNAL_ROOT')
     CWD_JOURNAL_ROOT = os.getcwd()
@@ -136,7 +136,7 @@ class TradeJournal:
         raise NotImplementedError(
             "This method should be implemented in a subclass.")
 
-    def add_trade(self, trade: Trade):
+    def add_trade(self, trade: DataPoint):
         logging.info(f"Adding trade with UID: {trade.uid}")
         self.trades.append(trade)
 

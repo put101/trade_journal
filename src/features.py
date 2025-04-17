@@ -17,8 +17,8 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 import pandas as pd
 import scipy.stats
-from tradecli import Trade
-from trade_old import *
+from tradecli import DataPoint
+from trade import *
 from IPython.display import display  # Import display for Jupyter Notebook
 import utils
 
@@ -29,7 +29,7 @@ from abc import ABC, abstractmethod
 
 class Feature(ABC):
     @abstractmethod
-    def add_tags_to_trade(self, trade: Execution):
+    def add_tags_to_trade(self, trade: DataPoint):
         pass
 
 class BaseFeature(Feature):
@@ -53,7 +53,7 @@ class BaseFeature(Feature):
     def DATETIME_TAGS() -> List[str]:
         return []
 
-    def add_tags_to_trade(self, trade: Execution):
+    def add_tags_to_trade(self, trade: DataPoint):
         pass
     
     @classmethod
@@ -126,7 +126,7 @@ def reorder_dataframe_columns(
 
 ## UTILS
 
-def dict_add_tags(trade: Trade, d: dict):
+def dict_add_tags(trade: DataPoint, d: dict):
     # add any dict of key_values to a trade
     trade.add_dict(d)
 
@@ -211,7 +211,7 @@ class Confidence(BaseFeature):
         return [Confidence.TAG_ORDINAL_CONFIDENCE] + [f"confidence_{level}" for level in Confidence.LEVELS]
     
     @staticmethod
-    def add_tags_to_trade(trade: Execution, confidence: int):
+    def add_tags_to_trade(trade: DataPoint, confidence: int):
         assert confidence in Confidence.LEVELS
         trade.add_tag(Confidence.TAG_ORDINAL_CONFIDENCE, confidence)
 
@@ -220,7 +220,7 @@ class MultiTimeframeAnalysis(BaseFeature):
     DEFAULT_HTF_POI_LTF_CONFIRMATION = None
     TYPE_HTF_POI_LTF_CONFIRMATION = bool
     
-    def add_tags_to_trade(trade: Execution, htf_poi_ltf_confirmation: bool):
+    def add_tags_to_trade(trade: DataPoint, htf_poi_ltf_confirmation: bool):
         assert htf_poi_ltf_confirmation is not None
         trade.add_tag("htf_poi_ltf_confirmation", htf_poi_ltf_confirmation)
     
@@ -262,7 +262,7 @@ class POI(BaseFeature):
         return POI.ALL_TAGS()
     
     @staticmethod
-    def add_tags(trade: Execution, pois: list[str]):
+    def add_tags(trade: DataPoint, pois: list[str]):
         trade.add_tag("poi", tuple(list(set(pois))))
         
         for poi in POI.ALL_TAGS():
@@ -392,7 +392,7 @@ class Outcome(BaseFeature):
     def get_outcome(rr: float) -> str:
         return Outcome.WIN if rr > 0 else (Outcome.BE if abs(rr) < Outcome.BE_THESHOLD else Outcome.LOSS)
     
-    def add_tags_to_trade(trade: Execution):
+    def add_tags_to_trade(trade: DataPoint):
         rr = next((t.value for t in trade.tags if t.key == Outcome.DEPENDENCY_RR), None)
         if not rr:
             logging.warning(f"Trade {trade.uid} does not have the '{Outcome.DEPENDENCY_RR}' tag")
@@ -457,7 +457,7 @@ class TradePosition(BaseFeature):
         self.tp_price = tp_price
         self.close_price = close_price
 
-    def add_tags_to_trade(self, trade: Execution):
+    def add_tags_to_trade(self, trade: DataPoint):
         trade.add_tag("entry_price", self.entry_price)
         trade.add_tag("sl_price", self.sl_price)
         trade.add_tag("tp_price", self.tp_price)
@@ -502,7 +502,7 @@ class InitialReward(BaseFeature):
         return tp_price - entry_price
     
     @staticmethod
-    def add_tags_to_trade(trade: Execution):
+    def add_tags_to_trade(trade: DataPoint):
         entry_price = next((t.value for t in trade.tags if t.key == "entry_price"), None)
         sl_price = next((t.value for t in trade.tags if t.key == "sl_price"), None)
         tp_price = next((t.value for t in trade.tags if t.key == "tp_price"), None)
@@ -566,7 +566,7 @@ class EntryTime(BaseFeature):
     def __init__(self, entry_time: datetime):
         self.entry_time = entry_time
             
-    def add_tags_to_trade(self, trade: Execution):
+    def add_tags_to_trade(self, trade: DataPoint):
         if EntryTime.TAG_ENTRY_TIME not in trade.get_tags_dict():
             trade.add_tag("entry_time", self.entry_time)
         else:
@@ -605,12 +605,12 @@ class Sessions(BaseFeature):
             session = Sessions.TOKYO
         return session
     
-    def add_tags_to_trade(ts: pd.Timestamp, trade: Execution):
+    def add_tags_to_trade(ts: pd.Timestamp, trade: DataPoint):
         if ts is not None:
             session = Sessions.session_from_ts(ts)
             trade.add_tag("session", session)
     
-    def add_tags_to_trade(trade: Execution):
+    def add_tags_to_trade(trade: DataPoint):
         ts = next((t.value for t in trade.tags if t.key == EntryTime.TAG_ENTRY_TIME), None)
         if ts is not None:
             session = Sessions.session_from_ts(ts)
@@ -738,12 +738,3 @@ def used_feature_classes(df: pd.DataFrame) -> List[Type[Feature]]:
     
     return list(set(used_classes))
 
-def used_feature_tags(df: pd.DataFrame) -> List[str]:
-    used_tags = []
-    for col in df.columns:
-        for cls in all_feature_classes():
-            for tag in cls.ALL_TAGS():
-                if tag in col:
-                    logging.info(f"Found tag {tag} in column {col}")
-                    used_tags.append(tag)
-    return list(set(used_tags))

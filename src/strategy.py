@@ -1,5 +1,5 @@
 import logging
-from src.tradecli import Trade, TradeJournal
+from src.tradecli import DataPoint, TradeJournal
 import pandas as pd
 from pprint import pprint as pp
 import utils

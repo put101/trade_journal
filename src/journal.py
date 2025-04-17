@@ -8,7 +8,6 @@ The journal supports going over all the trades and creating a feature dataframe 
 
 """
 
-from datetime import datetime, timedelta
 import markdown
 import os
 import random
@@ -18,7 +17,7 @@ import scipy
 from src.tradecli import * 
 from src.features import *
 from src.generate_test_data import get_test_data_journal
-from trade_old import *
+import trade
 
 logging.basicConfig(level=logging.INFO)
 
@@ -37,7 +36,7 @@ j.get_all_ignored_tags = get_all_ignored_tags
 
 
 t1 = None #TODO
-t2 = Trade(uid="2")
+t2 = DataPoint(uid="2")
 t2.add_tag('taken', True)
 Account.add_to_trade(t2, ACC_MT5_VANTAGE)
 EntryTime(pd.Timestamp('2025-02-18 14:10:00')).add_tags_to_trade(t2)
@@ -46,7 +45,7 @@ TradePosition(entry_price=2914.03,sl_price=2910.94, tp_price=3000.0, close_price
 print(t2)
 j.add_trade(t2)
 
-t4 = Trade(uid="4")
+t4 = DataPoint(uid="4")
 Account.add_to_trade(t4, ACC_IDEAL)
 EntryTime(pd.Timestamp('2025-02-22 15:11:00')).add_tags_to_trade(t4)
 # limit order, tp hit
@@ -58,31 +57,6 @@ POI.add_tags(t4, [POI.POI_1H_SC, POI.POI_1H_LIQUIDITY_GRAB, POI.POI_1M_SC])
 MultiTimeframeAnalysis.add_tags_to_trade(t4, True)
 PA.add_tags(t4, [PA.type_1_(TF.m15), PA.type_1_(TF.m5), PA.type_3_(TF.m1)])
 j.add_trade(t4)
-
-
-"""
-pos.market_entry(83091.31, 
-                pd.Timestamp('2025-03-17 14:17:00'), # my time 
-                Trade., 
-                sl_price=83249.60,
-                tp_price=71500.00,
-                lot_size=0.1,
-                sl_risk=14.52).close_position(82803.0, pd.Timestamp('2025-03-17 14:34:00'), )
-"""
-t5 = Trade(uid="5")
-t = Execution(83091.31, '2025-03-17 14:17:00', 83249.60, 71500.00, 0.1, 'sell', 14.52)
-j.add_trade(t5)
-
-
-
-t6 = Trade(uid="6")
-e6 = Execution(85091.31, '2025-04-15 09:20:00', 85527.00, 90339.17, 0.5, 'buy', -100.88)
-
-# 0.5 x 85755.96, 0.2 x (85804.90, 85855.68, 85978.37)
-# spread fix 1600
-# balance 175.94
-# pip value: 85755.96 x 0.5 -> 85866.18 48.55
-# orig SL: 85527.00 -> -100.88 EUR
 
 
 logging.info("Adding default tags to all trades")

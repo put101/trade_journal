@@ -11,10 +11,8 @@ import numpy as np
 from matplotlib.patches import Rectangle
 import logging
 
-import journal as jr
-
+# MY LIBRARIES
 from functools import partial
-
 
 def perform_anova(df: pd.DataFrame, dependent_var: str, independent_var: str):
     """
@@ -48,7 +46,7 @@ def get_return_series(df, col='return_points'):
     s.sort_index(inplace=True)
     return s
 
-def calculate_performance_metrics(df,):
+def calculate_performance_metrics(df, BE_THRESHOLD:float):
     """
     Calculate key performance metrics for the trade dataframe.
     """
@@ -96,7 +94,7 @@ def calculate_performance_metrics(df,):
         metrics.update(
             {
                 'Breakeven Trades': df['outcome_be'].sum(),
-                f'Breakeven Rate (%) (|rr|<{jr.Outcome.BE_THESHOLD})': df['outcome_be'].mean(),
+                f'Breakeven Rate (%) (|rr|<{BE_THRESHOLD})': df['outcome_be'].mean(),
             }
         )
     

@@ -16,6 +16,7 @@ class Trade:
                  point_value: Optional[float] = None):
         """
         Initialize a trade with an initial position, stop-loss, and take-profit.
+        The stop loss is specified as a price but stored as a distance from entry.
         """
         self.side = side.lower()
         self.entry_time = pd.Timestamp(entry_time) if isinstance(entry_time, str) else entry_time
@@ -23,32 +24,38 @@ class Trade:
         self.avg_entry_price = entry_price
         self.initial_size = size
         self.current_size = size
+        
+        # Calculate initial stop loss distance
+        self.initial_sl_distance = abs(entry_price - sl_price)
+        if self.initial_sl_distance == 0:
+            raise ValueError("Stop-loss distance cannot be zero.")
+            
+        # Current SL and TP prices (can be modified)
         self.sl_price = sl_price
         self.tp_price = tp_price
+        
         self.exit_time: Optional[datetime] = None
         self.realized_profit = 0.0
 
-        # Calculate point value if not provided.
-        sl_distance = abs(entry_price - sl_price)
-        if sl_distance == 0:
-            raise ValueError("Stop-loss distance cannot be zero.")
-        self.point_value = point_value or (abs(sl_monetary_value) / (sl_distance * size))
+        # Calculate point value if not provided
+        self.point_value = point_value or (abs(sl_monetary_value) / (self.initial_sl_distance * size))
         if not (0 < self.point_value < 10_000):
             raise ValueError("Calculated point value is out of expected range.")
 
-        # Flags and counters for partial closes.
+        # Flags and counters for partial closes
         self.has_partials_closed = False
         self.n_partial_closes = 0
         self.first_partial_close_time: Optional[datetime] = None
         self.last_partial_close_time: Optional[datetime] = None
 
-        # Event log.
+        # Event log
         self.modifications: List[Dict[str, Any]] = []
         self.modifications.append({
             'action': 'initial_trade',
             'time': self.entry_time,
             'entry_price': entry_price,
             'size': size,
+            'initial_sl_distance': self.initial_sl_distance,
             'sl_price': sl_price,
             'tp_price': tp_price,
             'point_value': self.point_value,
@@ -178,6 +185,7 @@ class Trade:
             'current_size': self.current_size,
             'total_profit': self.realized_profit,
             'point_value': self.point_value,
+            'initial_sl_distance': self.initial_sl_distance,
             'sl_price': self.sl_price,
             'tp_price': self.tp_price,
             'n_modifications': len(self.modifications),
@@ -280,6 +288,7 @@ class Trade:
             'final_size': summary['current_size'],
             'total_profit': summary['total_profit'],
             'point_value': summary['point_value'],
+            'initial_sl_distance': self.initial_sl_distance,
             'sl_price': summary['sl_price'],
             'tp_price': summary['tp_price'],
             'n_modifications': summary['n_modifications'],
@@ -318,6 +327,11 @@ class Trade:
                           var_name="level_type", value_name="value")
         sns.lineplot(data=df_risks, x="time", y="value", hue="level_type",
                     marker="s", ax=ax2, linestyle='--')
+        
+        # Add initial SL distance annotation
+        ax1.axhspan(self.initial_entry_price - self.initial_sl_distance, 
+                   self.initial_entry_price + self.initial_sl_distance,
+                   alpha=0.1, color='red', label='Initial SL Range')
         
         # Annotate events on the plot
         for _, row in df.iterrows():
