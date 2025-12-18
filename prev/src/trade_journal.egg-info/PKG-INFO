@@ -1,4 +1,4 @@
-Metadata-Version: 2.1
+Metadata-Version: 2.4
 Name: trade_journal
 Version: 0.1
 Summary: A package for managing trade journals.
@@ -13,3 +13,10 @@ Requires-Dist: pandas
 Requires-Dist: scipy
 Requires-Dist: matplotlib
 Requires-Dist: statemachine
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: home-page
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary

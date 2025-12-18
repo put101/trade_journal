@@ -4,5 +4,4 @@ src/trade_journal.egg-info/SOURCES.txt
 src/trade_journal.egg-info/dependency_links.txt
 src/trade_journal.egg-info/requires.txt
 src/trade_journal.egg-info/top_level.txt
-tests/test_analysis.py
-tests/test_features.py
+tests/test_trade.py
